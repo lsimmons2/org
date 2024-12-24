@@ -1,0 +1,16 @@
+{
+  "name": "org_db_stuff",
+  "version": "1.0.0",
+  "main": "knexfile.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "knex": "^3.1.0",
+    "pg": "^8.13.1"
+  }
+}

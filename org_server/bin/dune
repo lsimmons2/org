@@ -1,0 +1,4 @@
+(executable
+ (public_name org_server)
+ (name api)
+ (libraries cohttp-lwt-unix postgresql yojson lwt))
