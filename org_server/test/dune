@@ -1,2 +1,4 @@
 (test
- (name test_org_server))
+ (name test_org_server)
+ (libraries org_lib alcotest cohttp-lwt-unix postgresql yojson lwt alcotest-lwt ppx_deriving_yojson)
+ (preprocess (pps ppx_deriving_yojson)))

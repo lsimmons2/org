@@ -1,2 +1,5 @@
 (library
- (name org_server))
+ (name org_lib)
+ (modules db controller models repository)
+ (libraries cohttp-lwt-unix postgresql yojson lwt)
+ (preprocess (pps ppx_deriving_yojson)))
