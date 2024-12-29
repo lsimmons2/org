@@ -8,3 +8,8 @@
  (public_name diddle)
  (name diddle)
  (libraries org_lib cohttp-lwt-unix postgresql yojson lwt))
+
+(executable
+ (public_name parse_model_sheets)
+ (name parse_model_sheets)
+ (libraries org_lib cohttp-lwt-unix postgresql yojson lwt))

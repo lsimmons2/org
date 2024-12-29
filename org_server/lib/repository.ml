@@ -8,35 +8,15 @@
 
 open Lwt.Infix
 
-let get_things () : Models.thing list = 
-  let conn: Postgresql.connection = Db.db_connect `Test in
-  (* No params needed for this query, so we pass an empty array *)
-  let result = Db.query_db conn "SELECT * FROM things" ~params:[||] () in
-  conn#finish;
-  let rows = Array.to_list (result#get_all) in
-  (List.map
-     (fun row ->
-        let rv: Models.thing =
-          { Models.id = int_of_string row.(0);
-            Models.name = row.(1);
-            Models.text = if row.(2) = "" then None else Some row.(2) } in
-        rv)
-     rows)
 
+let thing_mapper (result : Postgresql.result) (row : int) : Models.thing =
+  {
+    id = int_of_string (result#getvalue row 0);  (* Assuming "id" is in column 0 *)
+    name = result#getvalue row 1;              (* Assuming "name" is in column 1 *)
+    text = let text_val = result#getvalue row 2 in
+      if text_val = "" then None else Some text_val;  (* Assuming "text" is in column 2 *)
+  }
 
-let get_tags () : Models.tag list =
-  let conn: Postgresql.connection = Db.db_connect `Test in
-  let result = Db.query_db conn "SELECT * FROM tags" ~params:[||] () in
-  conn#finish;
-  let rows = Array.to_list (result#get_all) in
-  (List.map
-     (fun row ->
-        {
-          Models.id = int_of_string row.(0);
-          name = row.(1);
-          text = if row.(2) = "" then None else Some row.(2)
-        })
-     rows)
 
 let tag_mapper (result : Postgresql.result) (row : int) : Models.tag =
   {
@@ -46,7 +26,49 @@ let tag_mapper (result : Postgresql.result) (row : int) : Models.tag =
       if text_val = "" then None else Some text_val;  (* Assuming "text" is in column 2 *)
   }
 
+
+let tag_to_thing_mapper (result : Postgresql.result) (row : int) : Models.tag_to_thing =
+  {
+    id = int_of_string (result#getvalue row 0);
+    tag_id = int_of_string (result#getvalue row 1);
+    thing_id = int_of_string (result#getvalue row 2);
+  }
+
+
+let get_things () : (Models.thing list, string) result = 
+  Db.query_and_map ~query:"SELECT * FROM things" ~params:[||] ~mapper:thing_mapper
+
+
+let get_tags () : (Models.tag list, string) result =
+  Db.query_and_map ~query:"SELECT * FROM tags" ~params:[||] ~mapper:tag_mapper
+
+
+let create_thing ~thing_name ~text =
+  let query = match text with
+    | Some _ -> "INSERT INTO things (name, text) VALUES ($1, $2) RETURNING id, name, text"
+    | None -> "INSERT INTO things (name) VALUES ($1) RETURNING id, name"
+  in
+  let params = match text with
+    | Some t -> [|thing_name; t|]
+    | None -> [|thing_name;|]
+  in
+  Db.query_and_map_single ~query:query ~params:params ~mapper:thing_mapper
+
 let create_tag ~name ~text =
-  let conn: Postgresql.connection = Db.db_connect `Test in
-  let query = "INSERT INTO tags (name, text) VALUES ($1, $2) RETURNING id, name, text" in
-  Db.query_and_return_created conn query ~params:[|name; text|] ~mapper:tag_mapper
+  let query = match text with
+    | Some _ -> "INSERT INTO tags (name, text) VALUES ($1, $2) RETURNING id, name, text"
+    | None -> "INSERT INTO tags (name) VALUES ($1) RETURNING id, name"
+  in
+  let params = match text with
+    | Some t -> [|name; t|]
+    | None -> [|name;|]
+  in
+  Db.query_and_map_single ~query:query ~params:params ~mapper:tag_mapper
+
+
+let tag_thing ~tag_id ~thing_id =
+  let query =
+    "INSERT INTO tags_to_things (tag_id, thing_id) VALUES ($1, $2) RETURNING id, tag_id, thing_id"
+  in
+  let params = [|(string_of_int tag_id); (string_of_int thing_id)|] in
+  Db.query_and_map_single ~query:query ~params:params ~mapper:tag_to_thing_mapper

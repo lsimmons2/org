@@ -1,3 +1,12 @@
+[@@@ocaml.warning "-26"]
+[@@@ocaml.warning "-27"]
+[@@@ocaml.warning "-32"]
+[@@@ocaml.warning "-33"]
+[@@@ocaml.warning "-34"]
+[@@@ocaml.warning "-69"]
+
+
+
 open Lwt.Infix
 
 let db_connect env =
@@ -8,31 +17,46 @@ let db_connect env =
   in
   new Postgresql.connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
 
-(* | `Test -> new Postgresql.connection ~host:"127.0.0.1" ~port:"5433" ~dbname:"your_database" ~user:"your_username" ~password:"your_password" () *)
-(* | `Dev -> new Postgresql.connection ~host:"127.0.0.1" ~port:"5433" ~dbname:"your_database" ~user:"your_username" ~password:"your_password" () *)
 
-let query_db (conn: Postgresql.connection) (query:string) ?(params=[||]) () =
-  let statement_name = "stmt" in
-  ignore (conn#prepare statement_name query);
-  let result = conn#exec_prepared ~params statement_name in
-  result
+let query_db (conn: Postgresql.connection) (query: string) ?(params=[||]) () =
+  try
+    let statement_name = "stmt" in
+    ignore(conn#prepare statement_name query);
+    let result = conn#exec_prepared ~params statement_name in
+    Ok result
+  with
+  | Postgresql.Error err ->
+    let err_msg = Printf.sprintf "PostgreSQL error: %s" (Postgresql.string_of_error err) in
+    Error err_msg
+  | exn ->
+    let err_msg = Printf.sprintf "Unexpected error: %s" (Printexc.to_string exn) in
+    Error err_msg
 
-let query_and_return_created
-    (conn : Postgresql.connection)
-    (query : string)
-    ~(params : string array)
-    ~(mapper : Postgresql.result -> int -> 'a)
-  : ('a, string) result Lwt.t =
-  Lwt_io.printlf "\n\nExecuting query: %s" query >>= fun () ->
-  Lwt_io.printlf "With params: [%s]" (String.concat "; " (Array.to_list params)) >>= fun () ->
-  let result = query_db conn query ~params () in
-  Lwt_io.printlf "Query executed. Number of rows returned: %d" result#ntuples >>= fun () ->
-  if result#ntuples = 0 then
-    Lwt_io.printlf "No rows returned from query." >>= fun () ->
-    Lwt.return (Error "No rows returned")
-  else
-    let row: 'a = mapper result 0 in
-    (* Generic string representation for debugging *)
-    (* let row_str = Printf.sprintf "%s" (Obj.magic row : string) in *)
-    (* Lwt_io.printlf "First row mapped to: %s" row_str >>= fun () -> *)
-    Lwt.return (Ok row)
+
+let query_and_map
+    ~(query:string)
+    ~(params: string array)
+    ~(mapper: Postgresql.result -> int -> 'a)
+  : ('a list, string) result =
+  let conn: Postgresql.connection = db_connect `Test in
+  match query_db conn query ~params () with
+  | Ok result ->
+    let rows = List.init result#ntuples (fun row -> mapper result row) in
+    conn#finish;
+    Ok rows
+  | Error err ->
+    conn#finish;
+    Error err
+
+let query_and_map_single
+    ~(query: string)
+    ~(params: string array)
+    ~(mapper: Postgresql.result -> int -> 'a)
+  : ('a, string) result =
+  match query_and_map ~query ~params ~mapper with
+  | Ok rows ->
+    (match rows with
+     | [row] -> Ok row
+     | [] -> Error "No rows returned"
+     | _ -> Error "Unexpected number of rows returned")
+  | Error err -> Error err

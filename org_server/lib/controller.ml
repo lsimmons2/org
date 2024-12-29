@@ -1,172 +1,115 @@
-open Lwt.Infix
-open Cohttp_lwt_unix
 [@@@ocaml.warning "-26"]
 [@@@ocaml.warning "-27"]
 [@@@ocaml.warning "-32"]
+[@@@ocaml.warning "-33"]
 [@@@ocaml.warning "-34"]
 [@@@ocaml.warning "-69"]
 
 
 
-let gen_get_response success message data to_yojson_func =
-  let resp_record = {Models.data; success; message} in
-  Yojson.Safe.to_string (Models.get_response_to_yojson to_yojson_func resp_record)
+
+open Lwt.Infix
+open Cohttp_lwt_unix
+
 
 
 (* NB: function was originally called list_to_yojson, but renamed since it's more general *)
 let list_to_something map_func lst = `List (List.map map_func lst)
 
-
-let get_things _conn _body =
-  let things: Models.thing list = Repository.get_things () in
-  let resp_json_str: string = gen_get_response
-      true
-      "Here are all the things"
-      (Some things)
-      (list_to_something Models.thing_to_yojson)
-  in
-  Lwt_io.printf "\nhere be the things getting returned:\n%s\n" resp_json_str >>= fun () ->
-  Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:resp_json_str ()
-
-
-let get_tags _conn _body =
-  let tags = Repository.get_tags () in
-  let resp_json_str = gen_get_response
-      true
-      "Here are all the tags" 
-      (Some tags)
-      (list_to_something Models.tag_to_yojson) in
-  Lwt_io.printf "\nhere be the tags getting returned:\n%s\n" resp_json_str >>= fun () ->
-  Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:resp_json_str ()
+type get_endpoint = unit -> Cohttp_lwt_unix.Server.response Lwt.t
+type post_endpoint = Cohttp_lwt.Body.t -> Cohttp_lwt_unix.Server.response Lwt.t
 
 
 
-(* TODO: this could be an "('a, to_yojson_func) option" ? *)
-let gen_created_response success message created to_yojson_func =
-  let json_resp: Yojson.Safe.t =
-    `Assoc [
-      ("success", `Bool success);
-      ("message", `String message);
-      ("created", (
-          match created with
-          | Some c -> to_yojson_func c
-          | None -> `Null));
-    ] in
-  Yojson.Safe.to_string json_resp
+
+let gen_api_resp_str success message data to_json=
+  let api_resp = {
+    Models.success = success;
+    message = message;
+    data = data;
+  } in
+  Yojson.Safe.to_string (Models.get_response_to_yojson to_json api_resp)
 
 
-let tag_mapper (result : Postgresql.result) (row : int) : Models.tag =
-  {
-    id = int_of_string (result#getvalue row 0);  (* Assuming "id" is in column 0 *)
-    name = result#getvalue row 1;              (* Assuming "name" is in column 1 *)
-    text = let text_val = result#getvalue row 2 in
-      if text_val = "" then None else Some text_val;  (* Assuming "text" is in column 2 *)
-  }
-
-let create_tag _conn body =
-  let conn = Db.db_connect `Test in
-  try
-    (* Parse the JSON body *)
-    let json = Yojson.Basic.from_string body in
-    let name_opt = Yojson.Basic.Util.(json |> member "name" |> to_string_option) in
-    let text_opt = Yojson.Basic.Util.(json |> member "text" |> to_string_option) in
-    match name_opt, text_opt with
-    | Some name, Some text ->
-      Repository.create_tag ~name ~text
-      >>= fun created_tag_result ->
-      conn#finish;
-      (match created_tag_result with
-       | Ok created_tag -> 
-         let resp_json_str: string =
-           gen_created_response true "gucci created babi" (Some created_tag) Models.tag_to_yojson in
-         Server.respond_string ~status:`Created ~body:resp_json_str ()
-       | Error _ ->
-         Server.respond_string ~status:`Not_found ~body:"woops! that wasn't supposed to happen" ())
-    | _ ->
-      (* Missing "name" or "text" in JSON body *)
-      conn#finish;
-      Server.respond_string ~status:`Bad_request ~body:"Missing 'name' or 'text' in request body" ()
-  with
-  | Yojson.Basic.Util.Type_error (msg, _) ->
-    (* Handle malformed JSON *)
-    conn#finish;
-    Server.respond_string ~status:`Bad_request ~body:("Malformed JSON: " ^ msg) ()
-  | exn ->
-    (* Handle other unexpected errors *)
-    conn#finish;
-    Server.respond_string ~status:`Internal_server_error ~body:("Error: " ^ Printexc.to_string exn) ()
+let generate_get_endpoint
+    (to_json: 'b -> Yojson.Safe.t) (controller: unit -> ('b, string) result Lwt.t)
+  : get_endpoint
+  = fun () ->
+    controller () >>= (function
+        | Ok rv ->
+          let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
+          Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
+        | Error err ->
+          let json_str = gen_api_resp_str false "my bad" None to_json in
+          Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
 
 
-let respond_json ~success ~message =
-  let resp_json: Yojson.Safe.t = `Assoc [("success", `Bool success); ("message", `String message)] in
-  Yojson.Safe.to_string resp_json
+let generate_post_endpoint
+    (of_json: Yojson.Safe.t -> ('a, string) result)
+    (to_json: 'b -> Yojson.Safe.t)
+    (controller: 'a -> ('b, string) result Lwt.t)
+  : post_endpoint
+  = fun (body: Cohttp_lwt.Body.t) ->
+    Cohttp_lwt.Body.to_string body >>= fun body_str ->
+    match Yojson.Safe.from_string body_str |> of_json with
+    | Ok parsed_body -> 
+      controller parsed_body >>= (function
+          | Ok rv ->
+            let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
+            Cohttp_lwt_unix.Server.respond_string ~status:`Created ~body:json_str ()
+          | Error err ->
+            let json_str = gen_api_resp_str false "my bad" None to_json in
+            Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
+    | Error json_body_parse_err ->
+      let json_str = gen_api_resp_str false "nah babi - bad request" None to_json in
+      Cohttp_lwt_unix.Server.respond_string ~status:`Bad_request ~body:json_str ()
 
 
 
-let tag_thing _conn (body_str: string) =
-  let conn = Db.db_connect `Test in
-  try
-    match Yojson.Safe.from_string body_str |> Models.tag_thing_body_of_yojson with
-    | Ok body ->
-      let query = "INSERT INTO tags_to_things (tag_id, thing_id) VALUES ($1, $2)" in
-      let params = [|string_of_int body.tag_id; string_of_int body.thing_id|] in
-      ignore (Db.query_db conn query ~params:params ());
-      conn#finish;
-      let resp_json_str = respond_json ~success:true ~message:"Tag-Thing relationship created" in
-      Server.respond_string ~status:`Created ~body:resp_json_str ()
-    | Error err ->
-      conn#finish;
-      Server.respond_string ~status:`Bad_request ~body:("Invalid JSON: " ^ err) ()
-  with
-  | Yojson.Basic.Util.Type_error (msg, _) ->
-    (* Handle malformed JSON *)
-    conn#finish;
-    Server.respond_string ~status:`Bad_request ~body:("Malformed JSON: " ^ msg) ()
-  | exn ->
-    (* Handle other unexpected errors *)
-    conn#finish;
-    Server.respond_string ~status:`Internal_server_error ~body:("Error: " ^ Printexc.to_string exn) ()
+let create_tag_endpoint
+  : post_endpoint
+  = generate_post_endpoint
+    Models.create_tag_body_of_yojson
+    Models.tag_to_yojson
+    (fun tag_body ->
+       let name = tag_body.Models.name in
+       let text = tag_body.Models.text in
+       let rv: (Models.tag, string) result = Repository.create_tag ~name ~text in
+       Lwt.return rv)
 
-let thing_mapper (result : Postgresql.result) (row : int) : Models.thing =
-  {
-    id = int_of_string (result#getvalue row 0);  (* Assuming "id" is in column 0 *)
-    name = result#getvalue row 1;              (* Assuming "name" is in column 1 *)
-    text = let text_val = result#getvalue row 2 in
-      if text_val = "" then None else Some text_val;  (* Assuming "text" is in column 2 *)
-  }
 
-let create_thing _conn body =
-  let conn = Db.db_connect `Test in
-  try
-    let json = Yojson.Basic.from_string body in
-    let name = Yojson.Basic.Util.(json |> member "name" |> to_string_option) in
-    let text = Yojson.Basic.Util.(json |> member "text" |> to_string_option) in
-    match name, text with
-    | Some name, Some text ->
-      (* Insert into the database *)
-      (* let query = "INSERT INTO things (name, text) VALUES ($1, $2)" in *)
-      let query = "INSERT INTO things (name, text) VALUES ($1, $2) RETURNING id, name, text" in
-      Db.query_and_return_created conn query ~params:[|name; text|] ~mapper:thing_mapper
-      >>= fun (created_thing_result: (Models.thing, string) result) ->
-      conn#finish;
-      (match created_thing_result with
-       | Ok created_thing -> 
-         let resp_json_str: string =
-           gen_created_response true "gucci created babi" (Some created_thing) Models.thing_to_yojson in
-         Server.respond_string ~status:`Created ~body:resp_json_str ()
-       | Error _ -> 
-         Server.respond_string ~status:`Not_found ~body:"woops! that wasn't supposed to happen" ())
+let get_things_endpoint: get_endpoint
+  = generate_get_endpoint
+    (list_to_something Models.thing_to_yojson)
+    (fun () ->
+       Lwt.return (Repository.get_things ()))
 
-    | _ ->
-      (* Missing "name" or "text" in JSON body *)
-      conn#finish;
-      Server.respond_string ~status:`Bad_request ~body:"Missing 'name' or 'text' in request body" ()
-  with
-  | Yojson.Basic.Util.Type_error (msg, _) ->
-    (* Handle malformed JSON *)
-    conn#finish;
-    Server.respond_string ~status:`Bad_request ~body:("Malformed JSON: " ^ msg) ()
-  | exn ->
-    (* Handle other unexpected errors *)
-    conn#finish;
-    Server.respond_string ~status:`Internal_server_error ~body:("Error: " ^ Printexc.to_string exn) ()
+
+let get_tags_endpoint : get_endpoint
+  = generate_get_endpoint
+    (list_to_something Models.tag_to_yojson)
+    (fun () -> 
+       Lwt.return (Repository.get_tags ())
+    )
+
+
+let create_thing_endpoint : post_endpoint
+  = generate_post_endpoint
+    Models.create_thing_body_of_yojson
+    Models.thing_to_yojson
+    (fun thing_body ->
+       let thing_name = thing_body.Models.name in
+       let text = thing_body.Models.text in
+       Lwt.return (Repository.create_thing ~thing_name ~text))
+
+
+let tag_thing_endpoint : post_endpoint
+  = generate_post_endpoint
+    Models.tag_thing_body_of_yojson
+    Models.tag_to_thing_to_yojson
+    (fun tag_to_thing_body ->
+       let tag_id = tag_to_thing_body.tag_id in
+       let thing_id = tag_to_thing_body.thing_id in
+       Lwt.return (Repository.tag_thing ~tag_id ~thing_id)
+    )
+
