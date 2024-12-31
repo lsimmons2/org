@@ -6,19 +6,27 @@
 
 open Lwt.Infix
 open Cohttp_lwt_unix
+open Org_lib
+
 
 
 let server =
   let router _conn req body =
-    let uri = req |> Request.uri |> Uri.path in
-    match (Request.meth req, uri) with
-    | (`GET, "/ping") -> Server.respond_string ~status:`OK ~body:("ponggggggg") ()
+    let uri = Request.uri req in
+    let path = Uri.path uri in
+    match (Request.meth req, path) with
+    | (`GET, "/ping") -> Server.respond_string ~status:`OK ~body:("pong") ()
 
-    | (`GET, "/things") -> Org_lib.Controller.get_things_endpoint ()
+    | (`GET, "/things") -> Org_lib.Controller.get_things_endpoint uri
     | (`POST, "/things") -> Org_lib.Controller.create_thing_endpoint body
+    | (`GET, path) when Re.execp Controller.things_id_regex path ->
+      Org_lib.Controller.get_thing_endpoint uri
 
-    | (`GET, "/tags") -> Org_lib.Controller.get_tags_endpoint ()
+
+    | (`GET, "/tags") -> Org_lib.Controller.get_tags_endpoint uri
     | (`POST, "/tags") -> Org_lib.Controller.create_tag_endpoint body
+    | (`DELETE, path) when Re.execp Controller.untag_thing_regex path ->
+      Org_lib.Controller.untag_thing_endpoint uri
 
     | (`POST, "/tag-to-thing") -> Org_lib.Controller.tag_thing_endpoint body
 

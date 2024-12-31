@@ -1,3 +1,4 @@
+[@@@ocaml.warning "-26"]  (* Disable unused-value-declaration warnings *)
 [@@@ocaml.warning "-27"]  (* Disable unused-value-declaration warnings *)
 [@@@ocaml.warning "-32"]  (* Disable unused-value-declaration warnings *)
 [@@@ocaml.warning "-69"]  (* Disable unused-value-declaration warnings *)
@@ -17,32 +18,19 @@ let test_ping () =
 
 
 let reset_db () =
-  Lwt_io.printf "\n\n\nClearing db!\n\n\n" >>= fun () ->
   let truncate_table table =
-    let conn = Org_lib.Db.db_connect `Test in
     let query = "TRUNCATE TABLE " ^ table ^ " CASCADE;" in
-    Lwt_io.printf "query to be run in reset_db: %s\n" query >>= fun () ->
-    match Org_lib.Db.query_db conn query () with
-    | Ok _ ->
-      conn#finish;
-      Lwt_io.printf "Query successful for table: %s\n" table
-    | Error err ->
-      conn#finish;
-      Lwt_io.printf "Query failed for table: %s with error: %s\n" table err
+    ignore(Org_lib.Db.query_db query ());
+    (* match Org_lib.Db.query_db query () with *)
+    (* | Ok _ -> *) (*   Lwt_io.printf "Query successful for table: %s\n" table *)
+    (* | Error err -> *)
+    (*   Lwt_io.printf "Query failed for table: %s with error: %s\n" table err *)
+    Lwt.return_unit
   in
   let tables = ["tags"; "things"; "tags_to_things"; "time_blocks"] in
-  List.fold_left
-    (fun acc table -> acc >>= fun () -> truncate_table table)
-    (Lwt.return_unit)
-    tables
-  >>= fun () ->
+  Lwt_list.iter_s truncate_table tables >>= fun () ->
+  (* Lwt_io.printf "Alllll tables cleared successfully.\n" >>= fun () -> *)
   Lwt.return_unit
-
-
-let reset_db_hook () =
-  Lwt_io.printf "holaaaaaaa in reset_db_hook\n\n" >>= fun () ->
-  Lwt_io.flush Lwt_io.stdout >>= fun () ->
-  reset_db ()
 
 
 let get_things_from_api () =
@@ -52,6 +40,15 @@ let get_things_from_api () =
 let get_tags_from_api () =
   let uri = Uri.of_string "http://localhost:7777/tags" in
   Cohttp_lwt_unix.Client.get uri
+
+let get_thing_from_api thing_id =
+  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/things/%d" thing_id) in
+  Cohttp_lwt_unix.Client.get uri
+
+let remove_tag_from_thing_in_api thing_id tag_id =
+  let uri = Uri.of_string (
+      Printf.sprintf "http://localhost:7777/things/%d/tags/%d" thing_id tag_id) in
+  Cohttp_lwt_unix.Client.delete uri
 
 let post_thing_to_api (body:Org_lib.Models.create_thing_body) =
   let uri = Uri.of_string "http://localhost:7777/things" in
@@ -80,7 +77,19 @@ let post_tag_to_api (body:Org_lib.Models.create_tag_body) =
   let json_payload:string = Yojson.Basic.to_string json_payload_obj in
   let headers = Cohttp.Header.init_with "Content-Type" "application/json" in
   let body = Cohttp_lwt.Body.of_string json_payload in
+  Cohttp_lwt_unix.Client.post ~headers ~body uri
 
+
+let tag_thing_in_api ~(tag_id: int) ~(thing_id: int) =
+  let uri = Uri.of_string "http://localhost:7777/tag-to-thing" in
+  let json_payload_obj: Yojson.Basic.t =
+    `Assoc [
+      ("thing_id", `Int thing_id);
+      ("tag_id", `Int tag_id);
+    ] in
+  let json_payload: string = Yojson.Basic.to_string json_payload_obj in
+  let headers = Cohttp.Header.init_with "Content-Type" "application/json" in
+  let body = Cohttp_lwt.Body.of_string json_payload in
   Cohttp_lwt_unix.Client.post ~headers ~body uri
 
 
@@ -188,29 +197,149 @@ let test_create_and_get_thing_and_tag () =
 
   Lwt.return_unit
 
+let test_tag_thing () =
+  (* *** CREATE THING *** *)
+  post_thing_to_api { name="thing name"; text = Some "thing text" }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload -> 
+  let created_thing = parse_option_or_fail_test created_thing_payload.data in
+  let created_thing_id = created_thing.id in
+
+  (* *** CREATE TAG *** *)
+  post_tag_to_api { name="tag name"; text = Some "tag text" }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun created_tag_payload ->
+  let created_tag: Org_lib.Models.tag = parse_option_or_fail_test created_tag_payload.data in
+  let created_tag_id = created_tag.id in
+
+  (* *** TAG THING *** *)
+  tag_thing_in_api ~tag_id:created_tag_id ~thing_id:created_thing_id
+  >>= fun (resp, body) ->
+  assert_http_status resp 201;
+  parse_payload body Org_lib.Models.tag_to_thing_of_yojson
+  >>= fun created_tag_to_thing_payload ->
+  let created_tag_to_thing = parse_option_or_fail_test created_tag_to_thing_payload.data in
+  Alcotest.(check int) "tag_to_thing.tag_id should be right" created_tag_id created_tag_to_thing.tag_id;
+  Alcotest.(check int) "tag_to_thing.thing_id should be right" created_thing_id created_tag_to_thing.thing_id;
+
+  (* *** MAKE SURE TAG IS RETURNED WITH THING *** *)
+  get_thing_from_api created_thing_id
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun get_thing_payload ->
+  assert_payload_success get_thing_payload;
+  let thing: Org_lib.Models.thing = parse_option_or_fail_test get_thing_payload.data in
+  Alcotest.(check int) "there should only be 1 tag" 1 (List.length thing.tags);
+  let tag_thing_tagged_with = List.hd thing.tags in 
+  Alcotest.(check int) "tag should have right id"
+    created_tag.id tag_thing_tagged_with.id;
+  Alcotest.(check string) "tag should have right name"
+    created_tag.name tag_thing_tagged_with.name;
+  Alcotest.(check (option string)) "tag should have right text"
+    created_tag.text tag_thing_tagged_with.text;
+  Lwt.return_unit
+
+
+let test_remove_tag_from_thing () =
+  (* *** CREATE THING *** *)
+  post_thing_to_api { name="thing name"; text = Some "thing text" }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload -> 
+  let created_thing_id = (parse_option_or_fail_test created_thing_payload.data).id in
+
+  (* *** CREATE 2 TAGS *** *)
+  post_tag_to_api { name="first tag"; text = Some "tag text" }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun first_tag_payload ->
+  let created_first_tag_id = (parse_option_or_fail_test first_tag_payload.data).id in
+
+  let second_tag_name = "second tag" in
+  post_tag_to_api { name=second_tag_name; text = Some "tag text" }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun second_tag_payload ->
+  let created_second_tag_id = (parse_option_or_fail_test second_tag_payload.data).id in
+
+
+  (* *** TAG THING WITH BOTH TAGS *** *)
+  tag_thing_in_api ~tag_id:created_first_tag_id ~thing_id:created_thing_id
+  >>= fun (resp, body) ->
+  tag_thing_in_api ~tag_id:created_second_tag_id ~thing_id:created_thing_id
+  >>= fun (resp, body) ->
+
+  (* *** ASSERT BOTH ARE ON THING *** *)
+  get_thing_from_api created_thing_id
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun get_thing_payload ->
+  assert_payload_success get_thing_payload;
+  let thing: Org_lib.Models.thing = parse_option_or_fail_test get_thing_payload.data in
+  Alcotest.(check int) "there should be 2 tags on thing" 2 (List.length (thing.tags));
+
+  (* *** REMOVE FIRST TAG *** *)
+  remove_tag_from_thing_in_api created_thing_id created_first_tag_id
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun remove_tag_payload ->
+  assert_payload_success remove_tag_payload;
+
+  (* *** MAKE SURE ONLY SECOND TAG IS RETURNED WITH THING *** *)
+  get_thing_from_api created_thing_id
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun get_thing_payload ->
+  assert_payload_success get_thing_payload;
+  let thing: Org_lib.Models.thing = parse_option_or_fail_test get_thing_payload.data in
+  Alcotest.(check int) "there should only be 1 tag" 1 (List.length thing.tags);
+  let remaining_tag = List.hd thing.tags in 
+  Alcotest.(check int) "remaining tag should have right id"
+    created_second_tag_id remaining_tag.id;
+  Alcotest.(check string) "remaining tag should have right name"
+    second_tag_name remaining_tag.name;
+  Lwt.return_unit
+
 
 let () =
   Printf.printf "wtf in main function\n\n";  (* Synchronous log *)
   let open Alcotest_lwt in
   Lwt_main.run (
     run "Org Server Tests" [
-      (* "Ping Endpoint", [ *)
-      (*   test_case "Ping Test" `Quick ( *)
-      (*     fun _switch () -> *)
-      (*       Lwt_io.printf "in ping test lambda thing\n" >>= fun () -> *)
-      (*       Lwt_io.flush Lwt_io.stdout >>= fun () -> *)
-      (*       reset_db_hook () >>= fun () -> *)
-      (*       test_ping () *)
-      (*   ); *)
-      (* ]; *)
+      "Ping Endpoint", [
+        test_case "Ping Test" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_ping ()
+        );
+      ];
       "Create and get things", [
         test_case "Create and get things Test" `Quick (
           fun _switch () ->
-            Lwt_io.printf "in create test\n" >>= fun () ->
             Lwt_io.flush Lwt_io.stdout >>= fun () ->
-            reset_db_hook () >>= fun () ->
-            test_create_and_get_thing_and_tag () >>= fun ()->
-            Lwt_io.printf "\nfinished running test!!!\n\n" >>= fun () -> Lwt.return_unit
+            reset_db () >>= fun () ->
+            test_create_and_get_thing_and_tag ()
+        );
+      ];
+      "Tag things", [
+        test_case "Should be able to create a thing and a tag and tag the thing" `Quick (
+          fun _switch () ->
+            Lwt_io.flush Lwt_io.stdout >>= fun () ->
+            reset_db () >>= fun () ->
+            test_tag_thing ()
+        );
+      ];
+      "Remove tags from things", [
+        test_case "Should be able to tag a things with multiple tags, then delete only one of them" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_remove_tag_from_thing ()
         );
       ];
     ]

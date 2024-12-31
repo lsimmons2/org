@@ -6,20 +6,41 @@
 [@@@ocaml.warning "-69"]
 
 
+(* /things/:id *)
+let things_id_regex = Re.Pcre.regexp "^/things/([^/]+)$"
+(* /things/:id/tags/:id *)
+let untag_thing_regex = Re.Pcre.regexp "^/things/([^/]+)/tags/([^/]+)$"
 
 
 open Lwt.Infix
 open Cohttp_lwt_unix
 
+let get_query_param_bool (uri : Uri.t) (param_name : string) : bool option =
+  match Uri.get_query_param uri param_name with
+  | None -> None
+  | Some value -> (
+      match String.lowercase_ascii value with
+      | "true" -> Some true
+      | "false" -> Some false
+      | _ -> None
+    )
+
+let get_query_param_int (uri : Uri.t) (param_name : string) : int option =
+  match Uri.get_query_param uri param_name with
+  | None -> None
+  | Some value -> (try Some (int_of_string value) with Failure _ -> None)
+
+let get_query_param_string (uri : Uri.t) (param_name : string) : string option =
+  Uri.get_query_param uri param_name
 
 
 (* NB: function was originally called list_to_yojson, but renamed since it's more general *)
 let list_to_something map_func lst = `List (List.map map_func lst)
 
-type get_endpoint = unit -> Cohttp_lwt_unix.Server.response Lwt.t
+
+type get_endpoint = Uri.t -> Cohttp_lwt_unix.Server.response Lwt.t
 type post_endpoint = Cohttp_lwt.Body.t -> Cohttp_lwt_unix.Server.response Lwt.t
-
-
+type delete_endpoint = Uri.t -> Cohttp_lwt_unix.Server.response Lwt.t
 
 
 let gen_api_resp_str success message data to_json=
@@ -31,16 +52,39 @@ let gen_api_resp_str success message data to_json=
   Yojson.Safe.to_string (Models.get_response_to_yojson to_json api_resp)
 
 
+let gen_api_resp_str_no_data success message =
+  let api_resp = {
+    Models.success = success;
+    message = message;
+    data = None;
+  } in
+  Yojson.Safe.to_string (Models.get_response_to_yojson (fun _ -> `Null) api_resp)
+
+
 let generate_get_endpoint
-    (to_json: 'b -> Yojson.Safe.t) (controller: unit -> ('b, string) result Lwt.t)
+    (to_json: 'b -> Yojson.Safe.t) (controller: Uri.t -> ('b, string) result Lwt.t)
   : get_endpoint
-  = fun () ->
-    controller () >>= (function
+  = fun uri ->
+    controller uri >>= (function
         | Ok rv ->
           let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
+          Lwt_io.printf "returning data %s\n" json_str >>= fun () ->
           Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
         | Error err ->
           let json_str = gen_api_resp_str false "my bad" None to_json in
+          Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
+
+
+let generate_delete_endpoint
+    (controller: Uri.t -> (unit, string) result Lwt.t)
+  : delete_endpoint
+  = fun uri ->
+    controller uri >>= (function
+        | Ok rv ->
+          let json_str = gen_api_resp_str_no_data true "gucci deleted" in
+          Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
+        | Error err ->
+          let json_str = gen_api_resp_str_no_data false "my bad" in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
 
 
@@ -62,6 +106,7 @@ let generate_post_endpoint
             Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
     | Error json_body_parse_err ->
       let json_str = gen_api_resp_str false "nah babi - bad request" None to_json in
+      Lwt_io.printf "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
       Cohttp_lwt_unix.Server.respond_string ~status:`Bad_request ~body:json_str ()
 
 
@@ -78,22 +123,36 @@ let create_tag_endpoint
        Lwt.return rv)
 
 
-let get_things_endpoint: get_endpoint
+let get_thing_endpoint
+  : get_endpoint
+  = generate_get_endpoint
+    Models.thing_to_yojson
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec things_id_regex path in
+       let thing_id_str = Re.Group.get matches 1 in
+       let thing_id = int_of_string thing_id_str in
+       Lwt.return (Repository.get_thing thing_id))
+
+let get_things_endpoint
+  : get_endpoint
   = generate_get_endpoint
     (list_to_something Models.thing_to_yojson)
-    (fun () ->
+    (fun _uri ->
        Lwt.return (Repository.get_things ()))
 
 
-let get_tags_endpoint : get_endpoint
+let get_tags_endpoint
+  : get_endpoint
   = generate_get_endpoint
     (list_to_something Models.tag_to_yojson)
-    (fun () -> 
+    (fun _uri -> 
        Lwt.return (Repository.get_tags ())
     )
 
 
-let create_thing_endpoint : post_endpoint
+let create_thing_endpoint
+  : post_endpoint
   = generate_post_endpoint
     Models.create_thing_body_of_yojson
     Models.thing_to_yojson
@@ -103,7 +162,8 @@ let create_thing_endpoint : post_endpoint
        Lwt.return (Repository.create_thing ~thing_name ~text))
 
 
-let tag_thing_endpoint : post_endpoint
+let tag_thing_endpoint
+  : post_endpoint
   = generate_post_endpoint
     Models.tag_thing_body_of_yojson
     Models.tag_to_thing_to_yojson
@@ -113,3 +173,19 @@ let tag_thing_endpoint : post_endpoint
        Lwt.return (Repository.tag_thing ~tag_id ~thing_id)
     )
 
+
+let untag_thing_endpoint
+  : delete_endpoint
+  = generate_delete_endpoint
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec untag_thing_regex path in
+
+       let thing_id_str = Re.Group.get matches 1 in
+       let thing_id = int_of_string thing_id_str in
+
+       let tag_id_str = Re.Group.get matches 2 in
+       let tag_id = int_of_string tag_id_str in
+
+       Lwt.return (Repository.untag_thing ~tag_id ~thing_id)
+    )

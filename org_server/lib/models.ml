@@ -1,7 +1,7 @@
 
 (* internal and external *)
-type thing = {id:int; name:string; text:string option;} [@@deriving yojson]
 type tag = {id:int; name:string; text:string option;} [@@deriving yojson]
+type thing = {id:int; name:string; text:string option; tags: tag list;} [@@deriving yojson]
 type tag_to_thing = {id:int; tag_id:int; thing_id:int;} [@@deriving yojson]
 
 (* api dtos *)

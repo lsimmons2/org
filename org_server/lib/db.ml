@@ -18,18 +18,29 @@ let db_connect env =
   new Postgresql.connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
 
 
-let query_db (conn: Postgresql.connection) (query: string) ?(params=[||]) () =
+let query_db (query: string) ?(params=[||]) () =
+  let conn = db_connect `Test in
+  let cleanup () = conn#finish in
   try
-    let statement_name = "stmt" in
+    let timestamp = string_of_float (Unix.gettimeofday ()) in
+    let statement_name = Printf.sprintf "stmt_%d_%s" (Hashtbl.hash query) timestamp in
+    (* Printf.printf "Preparing statement: %s with query: %s\n" statement_name query; *)
     ignore(conn#prepare statement_name query);
+    (* Printf.printf "Executing prepared statement: %s\n" statement_name; *)
     let result = conn#exec_prepared ~params statement_name in
+    cleanup ();
+    (* Printf.printf "Query executed successfully.\n"; *)
     Ok result
   with
   | Postgresql.Error err ->
     let err_msg = Printf.sprintf "PostgreSQL error: %s" (Postgresql.string_of_error err) in
+    cleanup ();
+    Printf.printf "Error during query execution: %s\n" err_msg;
     Error err_msg
   | exn ->
     let err_msg = Printf.sprintf "Unexpected error: %s" (Printexc.to_string exn) in
+    cleanup ();
+    Printf.printf "Unexpected exception: %s\n" err_msg;
     Error err_msg
 
 
@@ -38,14 +49,11 @@ let query_and_map
     ~(params: string array)
     ~(mapper: Postgresql.result -> int -> 'a)
   : ('a list, string) result =
-  let conn: Postgresql.connection = db_connect `Test in
-  match query_db conn query ~params () with
+  match query_db query ~params () with
   | Ok result ->
     let rows = List.init result#ntuples (fun row -> mapper result row) in
-    conn#finish;
     Ok rows
   | Error err ->
-    conn#finish;
     Error err
 
 let query_and_map_single
