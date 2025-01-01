@@ -40,6 +40,7 @@ let list_to_something map_func lst = `List (List.map map_func lst)
 
 type get_endpoint = Uri.t -> Cohttp_lwt_unix.Server.response Lwt.t
 type post_endpoint = Cohttp_lwt.Body.t -> Cohttp_lwt_unix.Server.response Lwt.t
+type put_endpoint = Cohttp_lwt.Body.t -> Cohttp_lwt_unix.Server.response Lwt.t
 type delete_endpoint = Uri.t -> Cohttp_lwt_unix.Server.response Lwt.t
 
 
@@ -109,6 +110,28 @@ let generate_post_endpoint
       Lwt_io.printf "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
       Cohttp_lwt_unix.Server.respond_string ~status:`Bad_request ~body:json_str ()
 
+
+
+let generate_put_endpoint
+    (of_json: Yojson.Safe.t -> ('a, string) result)
+    (to_json: 'b -> Yojson.Safe.t)
+    (controller: 'a -> ('b, string) result Lwt.t)
+  : put_endpoint
+  = fun (body: Cohttp_lwt.Body.t) ->
+    Cohttp_lwt.Body.to_string body >>= fun body_str ->
+    match Yojson.Safe.from_string body_str |> of_json with
+    | Ok parsed_body -> 
+      controller parsed_body >>= (function
+          | Ok rv ->
+            let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
+            Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
+          | Error err ->
+            let json_str = gen_api_resp_str false "my bad" None to_json in
+            Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
+    | Error json_body_parse_err ->
+      let json_str = gen_api_resp_str false "nah babi - bad request" None to_json in
+      Lwt_io.printf "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
+      Cohttp_lwt_unix.Server.respond_string ~status:`Bad_request ~body:json_str ()
 
 
 let create_tag_endpoint
@@ -189,3 +212,39 @@ let untag_thing_endpoint
 
        Lwt.return (Repository.untag_thing ~tag_id ~thing_id)
     )
+
+
+let create_set_endpoint
+  : post_endpoint
+  = generate_post_endpoint
+    Models.create_set_body_of_yojson
+    Models.set_to_yojson
+    (fun set_body ->
+       let name = set_body.Models.name in
+       let text = set_body.Models.text in
+       Lwt.return (Ok (Repository.create_set ~name ~text)))
+
+
+let update_set_endpoint
+  : put_endpoint
+  = generate_put_endpoint
+    Models.update_set_body_of_yojson
+    Models.set_to_yojson
+    (fun set_body ->
+       let set_id = set_body.Models.set_id in
+       let name = set_body.Models.name in
+       let text = set_body.Models.text in
+       let yes_ids_to_add = set_body.Models.yes_ids_to_add in
+       let yes_ids_to_remove = set_body.Models.yes_ids_to_remove in
+       let no_ids_to_add = set_body.Models.no_ids_to_add in
+       let no_ids_to_remove = set_body.Models.no_ids_to_remove in
+       let rv = Repository.update_set
+           set_id
+           ~name
+           ~text
+           ~yes_ids_to_add
+           ~yes_ids_to_remove
+           ~no_ids_to_add
+           ~no_ids_to_remove
+       in
+       Lwt.return rv)

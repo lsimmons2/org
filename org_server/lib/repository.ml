@@ -77,6 +77,7 @@ let create_thing ~thing_name ~text =
   in
   Db.query_and_map_single ~query:query ~params:params ~mapper:thing_mapper
 
+
 let create_tag ~name ~text =
   let query = match text with
     | Some _ -> "INSERT INTO tags (name, text) VALUES ($1, $2) RETURNING id, name, text"
@@ -104,4 +105,141 @@ let untag_thing ~tag_id ~thing_id =
   let params = [|(string_of_int thing_id); (string_of_int tag_id)|] in
   match Db.query_db query ~params:params () with
   | Ok _ -> Ok ()
+  | Error err -> Error err
+
+
+
+let set_data_dir = "/Users/leo/dev/org/set_db/"
+
+
+let get_set_file_path set_id =
+  let file_name = Printf.sprintf "%d.json" set_id in
+  Filename.concat set_data_dir file_name
+
+
+let extract_id fp =
+  let base_name = Filename.remove_extension fp in
+  int_of_string base_name
+
+
+let find_highest_set_id () =
+  let file_names = Sys.readdir set_data_dir in
+  Array.fold_left(
+    fun max_id file_name ->
+      let file_name_id = extract_id file_name in
+      if file_name_id > max_id then file_name_id else max_id
+  ) 0 file_names
+
+
+let create_set ~name ~text =
+  let new_set_id = (find_highest_set_id ()) + 1 in
+  let file_path = get_set_file_path new_set_id in
+  let new_set: Models.set = {
+    id=new_set_id;
+    name=name;
+    text=text;
+    yes_tag_ids=[];
+    no_tag_ids=[];
+  } in
+  Yojson.Safe.to_file file_path (Models.set_to_yojson new_set);
+  new_set
+
+
+let get_set set_id =
+  let file_path = get_set_file_path set_id in
+  if Sys.file_exists file_path then
+    Some (Yojson.Safe.from_file file_path |> Models.set_of_yojson)
+  else
+    None
+
+
+let delete_set set_id =
+  let file_path = get_set_file_path set_id in
+  try
+    Ok (Sys.remove file_path);
+  with
+  | Sys_error msg -> Printf.printf "Failed to remove file: %s\n" msg;
+    Error ("Failed to delete set: " ^ msg)
+
+(* SNIPPET - all this stuff *)
+let add_yes_tags_to_set tag_ids set =
+  let new_yes_tag_ids =
+    match tag_ids with
+    | Some ids -> List.fold_left 
+                    (fun acc tag_id -> if List.mem tag_id acc then acc else tag_id :: acc)
+                    set.Models.yes_tag_ids
+                    ids
+    | None -> set.yes_tag_ids
+  in
+  {set with yes_tag_ids = new_yes_tag_ids }
+
+
+let remove_yes_tags_from_set tag_ids set =
+  let new_yes_tag_ids =
+    match tag_ids with
+    | Some ids ->
+      List.filter (fun tag_id -> not (List.mem tag_id ids)) set.Models.yes_tag_ids
+    | None -> set.yes_tag_ids
+  in
+  {set with yes_tag_ids = new_yes_tag_ids }
+
+
+let add_no_tags_to_set tag_ids set =
+  let new_no_tag_ids =
+    match tag_ids with
+    | Some ids ->
+      List.fold_left 
+        (fun acc tag_id -> if List.mem tag_id acc then acc else tag_id :: acc)
+        set.Models.no_tag_ids
+        ids
+    | None -> set.no_tag_ids
+  in
+  {set with no_tag_ids = new_no_tag_ids }
+
+
+let remove_no_tags_from_set tag_ids set =
+  let new_no_tag_ids =
+    match tag_ids with
+    | Some ids -> 
+      List.filter (fun tag_id -> not (List.mem tag_id ids)) set.Models.no_tag_ids
+    | None -> set.no_tag_ids
+  in
+  {set with no_tag_ids = new_no_tag_ids }
+
+
+let update_set_name name (set: Models.set) =
+  match name with
+  | Some new_name -> { set with name = new_name }
+  | None -> set
+
+
+let update_set_text text (set: Models.set) =
+  match text with
+  | Some new_text -> { set with text = Some new_text }
+  | None -> set
+
+
+let update_set
+    set_id
+    ~name
+    ~text
+    ~yes_ids_to_add
+    ~yes_ids_to_remove
+    ~no_ids_to_add
+    ~no_ids_to_remove
+  =
+  let file_path = get_set_file_path set_id in
+  match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
+  | Ok set ->
+    let updated_set =
+      set
+      |> update_set_name name
+      |> update_set_text text
+      |> add_yes_tags_to_set yes_ids_to_add
+      |> remove_yes_tags_from_set yes_ids_to_remove
+      |> add_no_tags_to_set no_ids_to_add
+      |> remove_no_tags_from_set no_ids_to_remove
+    in
+    Yojson.Safe.to_file file_path (Models.set_to_yojson updated_set);
+    Ok updated_set
   | Error err -> Error err
