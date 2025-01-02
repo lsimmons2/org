@@ -25,10 +25,18 @@ let server =
 
     | (`GET, "/tags") -> Org_lib.Controller.get_tags_endpoint uri
     | (`POST, "/tags") -> Org_lib.Controller.create_tag_endpoint body
+
+    | (`POST, "/tag-to-thing") -> Org_lib.Controller.tag_thing_endpoint body
     | (`DELETE, path) when Re.execp Controller.untag_thing_regex path ->
       Org_lib.Controller.untag_thing_endpoint uri
 
-    | (`POST, "/tag-to-thing") -> Org_lib.Controller.tag_thing_endpoint body
+
+    | (`POST, "/sets") -> Org_lib.Controller.create_set_endpoint body
+    | (`GET, "/set") -> Org_lib.Controller.get_sets_endpoint uri
+    | (`GET, path) when Re.execp Controller.specific_set_path_regex path ->
+      Org_lib.Controller.get_set_endpoint uri
+    | (`DELETE, path) when Re.execp Controller.specific_set_path_regex path ->
+      Org_lib.Controller.delete_set_endpoint uri
 
     | _ -> Server.respond_string ~status:`Not_found ~body:"Not Found" ()
   in

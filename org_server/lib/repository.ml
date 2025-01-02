@@ -145,12 +145,37 @@ let create_set ~name ~text =
   new_set
 
 
-let get_set set_id =
+let get_set set_id: (Models.set, string) result =
   let file_path = get_set_file_path set_id in
   if Sys.file_exists file_path then
-    Some (Yojson.Safe.from_file file_path |> Models.set_of_yojson)
+    match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
+    (* TODO: why doesn't returning error from set_of_* yojson function work? *)
+    (* TODO: should this function return a result or an option? *)
+    | Ok d -> Ok d
+    | Error err -> Error err
   else
-    None
+    Error (Printf.sprintf "no set with id %d found" set_id)
+
+
+let get_all_sets () =
+  try
+    let file_names =
+      Sys.readdir set_data_dir
+      |> Array.to_list
+      |> List.filter (fun entry ->
+          let file_path = Filename.concat set_data_dir entry in
+          Sys.file_exists file_path && not (Sys.is_directory file_path)) in
+
+    List.fold_left (fun acc file_name ->
+        let set_id_str = Filename.remove_extension file_name in
+        let set_id = int_of_string set_id_str in
+        match acc, (get_set set_id) with
+        | Ok gucci_acc, Ok gucci_new -> Ok (gucci_new :: gucci_acc)
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+      ) (Ok []) file_names
+  with
+  | Sys_error msg -> Error (Printf.sprintf "Error reading directory: %s\n" msg)
 
 
 let delete_set set_id =

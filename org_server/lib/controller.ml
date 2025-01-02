@@ -10,6 +10,8 @@
 let things_id_regex = Re.Pcre.regexp "^/things/([^/]+)$"
 (* /things/:id/tags/:id *)
 let untag_thing_regex = Re.Pcre.regexp "^/things/([^/]+)/tags/([^/]+)$"
+(* /sets/:id *)
+let specific_set_path_regex = Re.Pcre.regexp "^/sets/([^/]+)$"
 
 
 open Lwt.Infix
@@ -223,6 +225,38 @@ let create_set_endpoint
        let name = set_body.Models.name in
        let text = set_body.Models.text in
        Lwt.return (Ok (Repository.create_set ~name ~text)))
+
+
+let get_sets_endpoint
+  : get_endpoint
+  = generate_get_endpoint
+    (list_to_something Models.set_to_yojson)
+    (fun uri ->
+       Lwt.return (Repository.get_all_sets()))
+
+
+let get_set_endpoint
+  : get_endpoint
+  = generate_get_endpoint
+    Models.set_to_yojson
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec specific_set_path_regex path in
+       let set_id_str = Re.Group.get matches 1 in
+       let set_id = int_of_string set_id_str in
+       let set_result = Repository.get_set set_id in
+       Lwt.return set_result)
+
+
+let delete_set_endpoint
+  : delete_endpoint
+  = generate_delete_endpoint
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec untag_thing_regex path in
+       let set_id_str = Re.Group.get matches 1 in
+       let set_id = int_of_string set_id_str in
+       Lwt.return (Repository.delete_set set_id))
 
 
 let update_set_endpoint
