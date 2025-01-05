@@ -1,7 +1,28 @@
+;; -*- lexical-binding: t -*-
 
-(defun fetch-things ()
-  "Fetch a list of things (mocked for now)."
-  `((id 1 name "Thing 1") (id 2 name "Thing 2") (id 3 name "Thing 3")))
+(require 'json)
+(require 'url)
+(require 'cl-lib) ;; For handling closures
+
+(defconst api-base-url "http://localhost:7777")
+
+(defun fetch-things (callback)
+  "Fetch a list of things from the API and call CALLBACK with the result."
+  (message "Callback value: %S" callback) ;; Log the callback
+
+  (request
+    (concat api-base-url "/things")
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+              (lambda (&key data &allow-other-keys)
+		(message "Callback deep in here...") ;; Log the callback
+		(message "%S" callback) ;; Log the callback
+		(funcall callback (alist-get 'data data))))
+    :error (cl-function
+            (lambda (&key error-thrown &allow-other-keys)
+              (message "Error fetching things: %s" error-thrown)))))
+
 
 (defun fetch-tags ()
   "Fetch a list of tags (mocked for now)."
