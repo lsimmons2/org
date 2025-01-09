@@ -25,13 +25,9 @@
     (tabulated-list-print t)))   ;; Render the entries
 
 
-(defun view-thing-details (id)
-  "Display details for the thing with ID."
-  (message "Viewing details for thing with ID: %s" id))
 
 
 (defun thing-list-visit-entry ()
-  (message "thing-list-visity-entry called!")
   "Open the thing details page for the current line."
   (interactive)
   (let ((id (tabulated-list-get-id)))
@@ -49,18 +45,15 @@
 (defun view-thing-list ()
   "Display a list of things."
   (interactive)
+  (message "rendering thing list new!!!")
   (let ((buffer (get-buffer-create "*Things*")))
-    (with-current-buffer buffer
-      (thing-list-mode)
-      (local-set-key (kbd "RET") #'thing-list-visit-entry)
+    (fetch-things
+     (lambda (data)
+       (with-current-buffer buffer
+	 (thing-list-mode)
+	 (setq things (append data nil)) ;; Converts `data` to a list
 
-      ;; Fetch things and render when data is ready
-      (fetch-things
-       (lambda (data)
-         (with-current-buffer buffer
-	   (setq things (append data nil)) ;; Converts `data` to a list
-
-           (render-thing-list things)))))
+         (render-thing-list things))))
     (switch-to-buffer buffer)))
 
 (provide 'thing-list)

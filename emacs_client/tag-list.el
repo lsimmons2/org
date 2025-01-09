@@ -2,7 +2,7 @@
 
 (require 'domain)
 
-(define-derived-mode tag-list-mode special-mode "Tag-List"
+(define-derived-mode tag-list-mode base-list-mode "TagList"
   "Major mode for listing tags.")
 
 (defun render-tag-list (tags)
@@ -17,10 +17,18 @@
 (defun view-tag-list ()
   "Display a list of tags."
   (interactive)
+  (message "rendering tag list!")
   (let ((buffer (get-buffer-create "*Tags*")))
     (with-current-buffer buffer
       (tag-list-mode)
-      (render-tag-list (fetch-tags))) ;; Fetch from API
+      ;; (local-set-key (kbd "RET") #'thing-list-visit-entry)
+
+      (fetch-tags
+       (lambda (data)
+         (with-current-buffer buffer
+	   (setq tags (append data nil)) ;; Converts `data` to a list
+
+           (render-thing-list tags)))))
     (switch-to-buffer buffer)))
 
 (provide 'tag-list)
