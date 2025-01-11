@@ -1,10 +1,8 @@
 ;;; thing-details.el --- Thing Details View -*- lexical-binding: t -*-
 
-(defun format-header (text)
-  "Format TEXT to be bold and styled like a programming keyword."
-  (propertize text 'face '(:weight bold :inherit font-lock-keyword-face)))
 
 (require 'domain)
+(require 'utils)
 
 (define-derived-mode thing-details-mode special-mode "Thing-Details"
   "Major mode for viewing details of a single thing.")

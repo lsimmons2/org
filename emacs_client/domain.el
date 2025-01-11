@@ -47,4 +47,17 @@
             (lambda (&key error-thrown &allow-other-keys)
               (message "Error fetching thing: %s" error-thrown)))))
 
+
+(defun fetch-tag (id callback)
+  (request
+    (concat api-base-url (format "/tags/%d" id))
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+              (lambda (&key data &allow-other-keys)
+		(funcall callback (alist-get 'data data))))
+    :error (cl-function
+            (lambda (&key error-thrown &allow-other-keys)
+              (message "Error fetching thing: %s" error-thrown)))))
+
 (provide 'domain) ;; Makes the API functions available to other files

@@ -2,8 +2,16 @@
 
 (require 'domain)
 
+(defun tag-list-visit-entry ()
+  (interactive)
+  (let ((id (tabulated-list-get-id)))
+    (if id
+        (view-tag-details id)
+      (message "No entry selected!"))))
+
 (define-derived-mode tag-list-mode base-list-mode "TagList"
-  "Major mode for listing tags.")
+  "Major mode for listing tags."
+  (evil-define-key 'normal tag-list-mode-map (kbd "RET") #'tag-list-visit-entry))
 
 (defun render-tag-list (tags)
   "Render a list of TAGS in the current buffer."

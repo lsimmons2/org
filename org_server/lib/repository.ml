@@ -66,6 +66,11 @@ let get_tags () : (Models.tag list, string) result =
   Db.query_and_map ~query:"SELECT * FROM tags" ~params:[||] ~mapper:tag_mapper
 
 
+let get_tag tag_id : (Models.tag, string) result =
+  let query = "SELECT id, name, text FROM tags WHERE id = $1" in
+  Db.query_and_map_single ~query:query ~params:[|string_of_int tag_id|] ~mapper:tag_mapper
+
+
 let create_thing ~thing_name ~text =
   let query = match text with
     | Some _ -> "INSERT INTO things (name, text) VALUES ($1, $2) RETURNING id, name, text"

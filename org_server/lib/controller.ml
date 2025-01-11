@@ -8,6 +8,7 @@
 
 (* /things/:id *)
 let things_id_regex = Re.Pcre.regexp "^/things/([^/]+)$"
+let tag_id_regex = Re.Pcre.regexp "^/tags/([^/]+)$"
 (* /things/:id/tags/:id *)
 let untag_thing_regex = Re.Pcre.regexp "^/things/([^/]+)/tags/([^/]+)$"
 (* /sets/:id *)
@@ -175,6 +176,17 @@ let get_tags_endpoint
        Lwt.return (Repository.get_tags ())
     )
 
+
+let get_tag_endpoint
+  : get_endpoint
+  = generate_get_endpoint
+    Models.tag_to_yojson
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec tag_id_regex path in
+       let tag_id_str = Re.Group.get matches 1 in
+       let tag_id = int_of_string tag_id_str in
+       Lwt.return (Repository.get_tag tag_id))
 
 let create_thing_endpoint
   : post_endpoint

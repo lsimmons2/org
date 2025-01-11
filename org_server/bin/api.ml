@@ -25,6 +25,8 @@ let server =
 
     | (`GET, "/tags") -> Org_lib.Controller.get_tags_endpoint uri
     | (`POST, "/tags") -> Org_lib.Controller.create_tag_endpoint body
+    | (`GET, path) when Re.execp Controller.tag_id_regex path ->
+      Org_lib.Controller.get_tag_endpoint uri
 
     | (`POST, "/tag-to-thing") -> Org_lib.Controller.tag_thing_endpoint body
     | (`DELETE, path) when Re.execp Controller.untag_thing_regex path ->
@@ -45,4 +47,3 @@ let server =
 let () =
   Printf.printf "\nHola - arrancando server on port 7777...\n%!";
   Lwt_main.run server
-

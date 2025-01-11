@@ -38,7 +38,6 @@
 
 (define-derived-mode thing-list-mode base-list-mode "ThingList"
   "Mode for viewing a list of things."
-  ;; Bind RET in Evil normal state to your custom function
   (evil-define-key 'normal thing-list-mode-map (kbd "RET") #'thing-list-visit-entry))
 
 

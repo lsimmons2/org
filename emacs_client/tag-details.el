@@ -1,27 +1,33 @@
 ;;; tag-details.el --- Tag Details View -*- lexical-binding: t -*-
 
 (require 'domain)
+(require 'utils)
 
 (define-derived-mode tag-details-mode special-mode "Tag-Details"
   "Major mode for viewing details of a single tag.")
 
-(defun render-tag-details (tag things)
-  "Render the details of TAG and its associated THINGS."
-  (erase-buffer)
-  (insert (format "Tag: %s\n\n" (alist-get 'name tag)))
-  (insert "Things:\n")
-  (dolist (thing things)
-    (insert (format "[%s] " (alist-get 'name thing)))))
+(defun render-tag-details (tag)
+  "Render the details of TAG and its associated TAGS."
+  (let ((inhibit-read-only t)) ;; Temporarily disable read-only mode
+    (erase-buffer)
+    (insert (format "%s\n%s\n\n" (format-header "Name:") (alist-get 'name tag)))
+    (insert (format "%s\n%s\n\n" (format-header "Description:") (alist-get 'text tag)))
+    )
+  )
 
 (defun view-tag-details (tag-id)
   "Display the details of a tag by TAG-ID."
   (interactive)
-  (let* ((tag (fetch-tag tag-id))         ;; Fetch from API
-         (things (fetch-things-for-tag tag-id)) ;; Fetch from API
-         (buffer (get-buffer-create "*Tag Details*")))
-    (with-current-buffer buffer
-      (tag-details-mode)
-      (render-tag-details tag things))
+  (message "Here in view-tag-details view for tag with ID: %d" tag-id)
+  (let ((buffer (get-buffer-create (format "*Tag %d*" tag-id))))
+    (fetch-tag
+     tag-id
+     (lambda (data)
+       (with-current-buffer buffer
+	 (tag-details-mode)
+	 (setq tag (append data nil)) ;; Converts `data` to a list
+         (render-tag-details tag)
+	 )))
     (switch-to-buffer buffer)))
 
 (provide 'tag-details)
