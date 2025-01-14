@@ -91,6 +91,13 @@ let generate_delete_endpoint
           let json_str = gen_api_resp_str_no_data false "my bad" in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
 
+(* TODO: wrote this function to avoid "pattern matching/try-catch hell" in generate_post_endpoint - might be able to do this better *)
+let parse_json
+    json_str
+    of_json = 
+  try Yojson.Safe.from_string json_str |> of_json
+  with Yojson.Json_error msg -> Error msg
+
 
 let generate_post_endpoint
     (of_json: Yojson.Safe.t -> ('a, string) result)
@@ -98,14 +105,16 @@ let generate_post_endpoint
     (controller: 'a -> ('b, string) result Lwt.t)
   : post_endpoint
   = fun (body: Cohttp_lwt.Body.t) ->
+
     Cohttp_lwt.Body.to_string body >>= fun body_str ->
-    match Yojson.Safe.from_string body_str |> of_json with
+    match parse_json body_str of_json with
     | Ok parsed_body -> 
       controller parsed_body >>= (function
           | Ok rv ->
             let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
             Cohttp_lwt_unix.Server.respond_string ~status:`Created ~body:json_str ()
           | Error err ->
+            Lwt_io.printf "\n\ncontroller function messed up!! %s\n" err >>= fun () ->
             let json_str = gen_api_resp_str false "my bad" None to_json in
             Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
     | Error json_body_parse_err ->
@@ -236,7 +245,8 @@ let create_set_endpoint
     (fun set_body ->
        let name = set_body.Models.name in
        let text = set_body.Models.text in
-       Lwt.return (Ok (Repository.create_set ~name ~text)))
+       Lwt_io.printf "\nin create set controllerrrrrrrrrrr\n" >>= fun () ->
+       Repository.create_set ~name ~text)
 
 
 let get_sets_endpoint

@@ -5,15 +5,20 @@
 (require 'tag-list)
 (require 'thing-details)
 (require 'tag-details)
+(require 'create-set-form)
 (require 'editable-buffer)
 
 (message "main.el loaded all files")
 
-
+(with-eval-after-load 'evil
+  (add-hook 'my-mode-hook
+            (lambda ()
+              (evil-local-set-key 'normal (kbd "S") 'my-special-save-function))))
 
 (with-eval-after-load 'evil
   (evil-define-key 'normal 'global (kbd "SPC h i") 'view-thing-list)
   (evil-define-key 'normal 'global (kbd "SPC h a") 'view-tag-list)
+  (evil-define-key 'normal 'global (kbd "SPC n s") 'create-set-ui)
   ;; (global-set-key (kbd "SPC h i") 'view-thing-list) ;; List things
   ;; (global-set-key (kbd "SPC h a") 'view-tag-list) ;; View a specific thing
   ;; (global-set-key (kbd "SPC e n")

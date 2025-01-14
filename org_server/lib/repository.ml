@@ -137,17 +137,38 @@ let find_highest_set_id () =
 
 
 let create_set ~name ~text =
-  let new_set_id = (find_highest_set_id ()) + 1 in
-  let file_path = get_set_file_path new_set_id in
-  let new_set: Models.set = {
-    id=new_set_id;
-    name=name;
-    text=text;
-    yes_tag_ids=[];
-    no_tag_ids=[];
-  } in
-  Yojson.Safe.to_file file_path (Models.set_to_yojson new_set);
-  new_set
+  Lwt_io.printf "wtffff \n" >>= fun () ->
+  Lwt.catch
+    (fun () ->
+       (* Try block *)
+       let new_set_id = (find_highest_set_id ()) + 1 in
+       Lwt_io.printf "wtffff no id?\n" >>= fun () ->
+       let file_path = get_set_file_path new_set_id in
+       let new_set: Models.set = {
+         id=new_set_id;
+         name=name;
+         text=text;
+         yes_tag_ids=[];
+         no_tag_ids=[];
+       } in
+       Lwt_io.printf "literally wtffff \n" >>= fun () ->
+       Yojson.Safe.to_file file_path (Models.set_to_yojson new_set);
+       Lwt.return_ok new_set
+    )
+    (fun exn ->
+       (* Catch block *)
+       match exn with
+       | Yojson.Json_error msg ->
+         Lwt_io.printf "wtf 1 \n" >>= fun () ->
+         Lwt.return_error (Printf.sprintf "Failed to write JSON to file: %s" msg)
+       | Sys_error msg ->
+         Lwt_io.printf "Sys_error!!!!!!!!!!! \n" >>= fun () ->
+         Lwt.return_error (Printf.sprintf "Sys_error: %s" msg)
+       | _ ->
+         Lwt_io.printf "wtf 2 \n" >>= fun () ->
+         Printf.printf "Unexpected exception: %s\n%!" (Printexc.to_string exn);
+         Lwt.return_error (Printf.sprintf "Unexpected exception: %s" (Printexc.to_string exn))
+    )
 
 
 let get_set set_id: (Models.set, string) result =

@@ -34,6 +34,7 @@ let server =
 
 
     | (`POST, "/sets") -> Org_lib.Controller.create_set_endpoint body
+    (* TODO: /sets not set *)
     | (`GET, "/set") -> Org_lib.Controller.get_sets_endpoint uri
     | (`GET, path) when Re.execp Controller.specific_set_path_regex path ->
       Org_lib.Controller.get_set_endpoint uri

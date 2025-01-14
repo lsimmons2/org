@@ -34,7 +34,7 @@
          'follow-link t
          'tag-id tag-id)))) ;; Add `tag-id` as a text property
   )
-)
+
 
 (defun view-thing-details (thing-id)
   "Display the details of a thing by THING-ID."
