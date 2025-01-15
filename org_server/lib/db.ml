@@ -49,12 +49,18 @@ let query_and_map
     ~(params: string array)
     ~(mapper: Postgresql.result -> int -> 'a)
   : ('a list, string) result =
-  match query_db query ~params () with
-  | Ok result ->
-    let rows = List.init result#ntuples (fun row -> mapper result row) in
-    Ok rows
-  | Error err ->
-    Error err
+  try
+    match query_db query ~params () with
+    | Ok result ->
+      let rows = List.init result#ntuples (fun row -> mapper result row) in
+      Ok rows
+    | Error err ->
+      Error err
+  with 
+  | Postgresql.Error e ->
+    Error (Printf.sprintf "PostgreSQL error: %s" (Postgresql.string_of_error e))
+  | exn -> Error (Printf.sprintf "Unexpected exception: %s" (Printexc.to_string exn))
+
 
 let query_and_map_single
     ~(query: string)

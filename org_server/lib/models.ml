@@ -9,6 +9,7 @@ type set = {
   text: string option;
   yes_tag_ids: int list;
   no_tag_ids: int list;
+  things: thing list;
 } [@@deriving yojson]
 
 (* api dtos *)
@@ -19,7 +20,6 @@ type create_tag_body = {name:string; text:string option;} [@@deriving yojson]
 type tag_thing_body = {tag_id:int; thing_id:int} [@@deriving yojson]
 type create_set_body = {name:string; text:string option;} [@@deriving yojson]
 type update_set_body = {
-  set_id: int;
   name: string option;
   text: string option;
   yes_ids_to_add: int list option;

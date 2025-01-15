@@ -9,11 +9,30 @@ open Cohttp_lwt_unix
 open Org_lib
 
 
+let log_request req =
+  let path = Uri.path (Request.uri req) in
+  let method_str = match(Request.meth req) with
+    | `GET -> "GET"
+    | `POST -> "POST"
+    | `PUT -> "PUT"
+    | `DELETE -> "DELETE"
+    | `OPTIONS -> "OPTIONS"
+    | `CONNECT -> "CONNECT"
+    | `TRACE -> "TRACE"
+    | `HEAD -> "HEAD"
+    | `PATCH -> "PATCH"
+    | _ -> "*OTHER*"
+  in
+
+  Lwt_io.printf "\n%s %s\n" method_str path
 
 let server =
   let router _conn req body =
     let uri = Request.uri req in
     let path = Uri.path uri in
+
+    log_request req >>= fun () ->
+
     match (Request.meth req, path) with
     | (`GET, "/ping") -> Server.respond_string ~status:`OK ~body:("pong") ()
 
@@ -38,6 +57,8 @@ let server =
     | (`GET, "/set") -> Org_lib.Controller.get_sets_endpoint uri
     | (`GET, path) when Re.execp Controller.specific_set_path_regex path ->
       Org_lib.Controller.get_set_endpoint uri
+    | (`PUT, path) when Re.execp Controller.specific_set_path_regex path ->
+      Org_lib.Controller.update_set_endpoint uri body
     | (`DELETE, path) when Re.execp Controller.specific_set_path_regex path ->
       Org_lib.Controller.delete_set_endpoint uri
 
@@ -46,5 +67,7 @@ let server =
   Server.create ~mode:(`TCP (`Port 7777)) (Server.make ~callback:router ())
 
 let () =
-  Printf.printf "\nHola - arrancando server on port 7777...\n%!";
+  let current_env = Env.current_environment () in
+  Printf.printf "\nHola - arrancando server on port 7777 in %s env...\n%!" (Env.string_of_env current_env);
+  (* Printf.printf "\nHola - arrancando server on port 7777...\n%!"; *)
   Lwt_main.run server

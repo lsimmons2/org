@@ -5,7 +5,6 @@
 [@@@ocaml.warning "-34"]
 [@@@ocaml.warning "-69"]
 
-
 open Lwt.Infix
 
 
@@ -13,8 +12,12 @@ let thing_mapper (result : Postgresql.result) (row : int) : Models.thing =
   {
     id = int_of_string (result#getvalue row 0);  (* Assuming "id" is in column 0 *)
     name = result#getvalue row 1;              (* Assuming "name" is in column 1 *)
-    text = (let text_val = result#getvalue row 2 in
-            if text_val = "" then None else Some text_val);  (* Assuming "text" is in column 2 *)
+    text =
+      if result#nfields > 2 then
+        let text_val = result#getvalue row 2 in
+        if text_val = "" then None else Some text_val
+      else
+        None;
     tags = [];  (* Tags will be fetched and populated later *)
 
   }
@@ -24,8 +27,12 @@ let tag_mapper (result : Postgresql.result) (row : int) : Models.tag =
   {
     id = int_of_string (result#getvalue row 0);  (* Assuming "id" is in column 0 *)
     name = result#getvalue row 1;              (* Assuming "name" is in column 1 *)
-    text = let text_val = result#getvalue row 2 in
-      if text_val = "" then None else Some text_val;  (* Assuming "text" is in column 2 *)
+    text =
+      if result#nfields > 2 then
+        let text_val = result#getvalue row 2 in
+        if text_val = "" then None else Some text_val
+      else
+        None;
   }
 
 
@@ -80,7 +87,12 @@ let create_thing ~thing_name ~text =
     | Some t -> [|thing_name; t|]
     | None -> [|thing_name;|]
   in
-  Db.query_and_map_single ~query:query ~params:params ~mapper:thing_mapper
+
+  Lwt_io.printf "in create_thing with query: %s\n" query >>= fun () ->
+
+  let rv = Db.query_and_map_single ~query:query ~params:params ~mapper:thing_mapper in
+
+  Lwt.return rv
 
 
 let create_tag ~name ~text =
@@ -114,35 +126,35 @@ let untag_thing ~tag_id ~thing_id =
 
 
 
-let set_data_dir = "/Users/leo/dev/org/set_db/"
+let config = Env.get_config
 
 
 let get_set_file_path set_id =
   let file_name = Printf.sprintf "%d.json" set_id in
-  Filename.concat set_data_dir file_name
+  Filename.concat config.set_db_dir file_name
 
 
 let extract_id fp =
   let base_name = Filename.remove_extension fp in
+  (* Lwt_io.printf "base_name be %s\n" base_name >>= fun () -> *)
   int_of_string base_name
 
 
 let find_highest_set_id () =
-  let file_names = Sys.readdir set_data_dir in
-  Array.fold_left(
-    fun max_id file_name ->
-      let file_name_id = extract_id file_name in
-      if file_name_id > max_id then file_name_id else max_id
-  ) 0 file_names
+  let file_names = Sys.readdir config.set_db_dir in
+  let rv = Array.fold_left(
+      fun max_id file_name ->
+        let file_name_id = extract_id file_name in
+        if file_name_id > max_id then file_name_id else max_id
+    ) 0 file_names in
+  rv
 
 
 let create_set ~name ~text =
-  Lwt_io.printf "wtffff \n" >>= fun () ->
   Lwt.catch
     (fun () ->
        (* Try block *)
        let new_set_id = (find_highest_set_id ()) + 1 in
-       Lwt_io.printf "wtffff no id?\n" >>= fun () ->
        let file_path = get_set_file_path new_set_id in
        let new_set: Models.set = {
          id=new_set_id;
@@ -150,8 +162,8 @@ let create_set ~name ~text =
          text=text;
          yes_tag_ids=[];
          no_tag_ids=[];
+         things=[];
        } in
-       Lwt_io.printf "literally wtffff \n" >>= fun () ->
        Yojson.Safe.to_file file_path (Models.set_to_yojson new_set);
        Lwt.return_ok new_set
     )
@@ -159,16 +171,39 @@ let create_set ~name ~text =
        (* Catch block *)
        match exn with
        | Yojson.Json_error msg ->
-         Lwt_io.printf "wtf 1 \n" >>= fun () ->
          Lwt.return_error (Printf.sprintf "Failed to write JSON to file: %s" msg)
        | Sys_error msg ->
-         Lwt_io.printf "Sys_error!!!!!!!!!!! \n" >>= fun () ->
          Lwt.return_error (Printf.sprintf "Sys_error: %s" msg)
        | _ ->
-         Lwt_io.printf "wtf 2 \n" >>= fun () ->
-         Printf.printf "Unexpected exception: %s\n%!" (Printexc.to_string exn);
          Lwt.return_error (Printf.sprintf "Unexpected exception: %s" (Printexc.to_string exn))
     )
+
+
+
+
+let get_things_for_yes_and_no_tag_ids yes_tag_ids no_tag_ids =
+  let int_list_to_pg_array lst =
+    "{" ^ (String.concat "," (List.map string_of_int lst)) ^ "}"
+  in
+
+  let query = {|
+    SELECT DISTINCT t.*
+    FROM things t
+    INNER JOIN tags_to_things tt ON t.id = tt.thing_id
+    WHERE tt.tag_id = ANY ($1)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM tags_to_things tt2
+        WHERE tt2.thing_id = t.id
+          AND tt2.tag_id = ANY ($2)
+      )
+  |} in
+
+  let params = [| int_list_to_pg_array yes_tag_ids;
+                  int_list_to_pg_array no_tag_ids |] in
+  Db.query_and_map ~query ~params ~mapper:thing_mapper
+
+
 
 
 let get_set set_id: (Models.set, string) result =
@@ -177,7 +212,12 @@ let get_set set_id: (Models.set, string) result =
     match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
     (* TODO: why doesn't returning error from set_of_* yojson function work? *)
     (* TODO: should this function return a result or an option? *)
-    | Ok d -> Ok d
+    | Ok d -> (
+        let things = get_things_for_yes_and_no_tag_ids d.yes_tag_ids d.no_tag_ids in
+        match things with
+        | Ok ts -> Ok { d with things = ts }
+        | Error err -> Error err
+      )
     | Error err -> Error err
   else
     Error (Printf.sprintf "no set with id %d found" set_id)
@@ -186,10 +226,10 @@ let get_set set_id: (Models.set, string) result =
 let get_all_sets () =
   try
     let file_names =
-      Sys.readdir set_data_dir
+      Sys.readdir config.set_db_dir
       |> Array.to_list
       |> List.filter (fun entry ->
-          let file_path = Filename.concat set_data_dir entry in
+          let file_path = Filename.concat config.set_db_dir entry in
           Sys.file_exists file_path && not (Sys.is_directory file_path)) in
 
     List.fold_left (fun acc file_name ->

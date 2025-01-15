@@ -43,7 +43,7 @@ let list_to_something map_func lst = `List (List.map map_func lst)
 
 type get_endpoint = Uri.t -> Cohttp_lwt_unix.Server.response Lwt.t
 type post_endpoint = Cohttp_lwt.Body.t -> Cohttp_lwt_unix.Server.response Lwt.t
-type put_endpoint = Cohttp_lwt.Body.t -> Cohttp_lwt_unix.Server.response Lwt.t
+type put_endpoint = Uri.t -> Cohttp_lwt.Body.t -> Cohttp_lwt_unix.Server.response Lwt.t
 type delete_endpoint = Uri.t -> Cohttp_lwt_unix.Server.response Lwt.t
 
 
@@ -91,6 +91,7 @@ let generate_delete_endpoint
           let json_str = gen_api_resp_str_no_data false "my bad" in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
 
+
 (* TODO: wrote this function to avoid "pattern matching/try-catch hell" in generate_post_endpoint - might be able to do this better *)
 let parse_json
     json_str
@@ -112,10 +113,12 @@ let generate_post_endpoint
       controller parsed_body >>= (function
           | Ok rv ->
             let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
+            Lwt_io.printf "Returning data from endpoint: %s\n" json_str >>= fun () ->
             Cohttp_lwt_unix.Server.respond_string ~status:`Created ~body:json_str ()
           | Error err ->
             Lwt_io.printf "\n\ncontroller function messed up!! %s\n" err >>= fun () ->
             let json_str = gen_api_resp_str false "my bad" None to_json in
+            Lwt_io.printf "Error from controller: %s\n" err >>= fun () ->
             Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
     | Error json_body_parse_err ->
       let json_str = gen_api_resp_str false "nah babi - bad request" None to_json in
@@ -127,13 +130,13 @@ let generate_post_endpoint
 let generate_put_endpoint
     (of_json: Yojson.Safe.t -> ('a, string) result)
     (to_json: 'b -> Yojson.Safe.t)
-    (controller: 'a -> ('b, string) result Lwt.t)
+    (controller: Uri.t -> 'a -> ('b, string) result Lwt.t)
   : put_endpoint
-  = fun (body: Cohttp_lwt.Body.t) ->
+  = fun (uri: Uri.t) (body: Cohttp_lwt.Body.t) ->
     Cohttp_lwt.Body.to_string body >>= fun body_str ->
     match Yojson.Safe.from_string body_str |> of_json with
     | Ok parsed_body -> 
-      controller parsed_body >>= (function
+      controller uri parsed_body >>= (function
           | Ok rv ->
             let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
             Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
@@ -143,6 +146,7 @@ let generate_put_endpoint
     | Error json_body_parse_err ->
       let json_str = gen_api_resp_str false "nah babi - bad request" None to_json in
       Lwt_io.printf "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
+      Lwt_io.printf "err: %s\n" json_body_parse_err >>= fun () ->
       Cohttp_lwt_unix.Server.respond_string ~status:`Bad_request ~body:json_str ()
 
 
@@ -197,6 +201,7 @@ let get_tag_endpoint
        let tag_id = int_of_string tag_id_str in
        Lwt.return (Repository.get_tag tag_id))
 
+
 let create_thing_endpoint
   : post_endpoint
   = generate_post_endpoint
@@ -205,7 +210,11 @@ let create_thing_endpoint
     (fun thing_body ->
        let thing_name = thing_body.Models.name in
        let text = thing_body.Models.text in
-       Lwt.return (Repository.create_thing ~thing_name ~text))
+       Lwt_io.printf "hola here bfore calling repo method \n" >>= fun () ->
+       let rv = Repository.create_thing ~thing_name ~text in
+       Lwt_io.printf "returning from create_thing_endpoint\n" >>= fun () ->
+       rv
+    )
 
 
 let tag_thing_endpoint
@@ -245,7 +254,6 @@ let create_set_endpoint
     (fun set_body ->
        let name = set_body.Models.name in
        let text = set_body.Models.text in
-       Lwt_io.printf "\nin create set controllerrrrrrrrrrr\n" >>= fun () ->
        Repository.create_set ~name ~text)
 
 
@@ -286,8 +294,12 @@ let update_set_endpoint
   = generate_put_endpoint
     Models.update_set_body_of_yojson
     Models.set_to_yojson
-    (fun set_body ->
-       let set_id = set_body.Models.set_id in
+    (fun uri set_body ->
+       let path = Uri.path uri in
+       let matches = Re.exec specific_set_path_regex path in
+       let set_id_str = Re.Group.get matches 1 in
+       let set_id = int_of_string set_id_str in
+
        let name = set_body.Models.name in
        let text = set_body.Models.text in
        let yes_ids_to_add = set_body.Models.yes_ids_to_add in
