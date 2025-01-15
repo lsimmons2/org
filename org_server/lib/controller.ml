@@ -18,6 +18,7 @@ let specific_set_path_regex = Re.Pcre.regexp "^/sets/([^/]+)$"
 open Lwt.Infix
 open Cohttp_lwt_unix
 
+
 let get_query_param_bool (uri : Uri.t) (param_name : string) : bool option =
   match Uri.get_query_param uri param_name with
   | None -> None
@@ -31,7 +32,12 @@ let get_query_param_bool (uri : Uri.t) (param_name : string) : bool option =
 let get_query_param_int (uri : Uri.t) (param_name : string) : int option =
   match Uri.get_query_param uri param_name with
   | None -> None
-  | Some value -> (try Some (int_of_string value) with Failure _ -> None)
+  | Some value -> (
+      try
+        Some (int_of_string value)
+      with
+        Failure _ -> None
+    )
 
 let get_query_param_string (uri : Uri.t) (param_name : string) : string option =
   Uri.get_query_param uri param_name
@@ -116,9 +122,8 @@ let generate_post_endpoint
             Lwt_io.printf "Returning data from endpoint: %s\n" json_str >>= fun () ->
             Cohttp_lwt_unix.Server.respond_string ~status:`Created ~body:json_str ()
           | Error err ->
-            Lwt_io.printf "\n\ncontroller function messed up!! %s\n" err >>= fun () ->
+            Lwt_io.printf "Error in controller function: %s\n" err >>= fun () ->
             let json_str = gen_api_resp_str false "my bad" None to_json in
-            Lwt_io.printf "Error from controller: %s\n" err >>= fun () ->
             Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
     | Error json_body_parse_err ->
       let json_str = gen_api_resp_str false "nah babi - bad request" None to_json in
@@ -210,10 +215,7 @@ let create_thing_endpoint
     (fun thing_body ->
        let thing_name = thing_body.Models.name in
        let text = thing_body.Models.text in
-       Lwt_io.printf "hola here bfore calling repo method \n" >>= fun () ->
-       let rv = Repository.create_thing ~thing_name ~text in
-       Lwt_io.printf "returning from create_thing_endpoint\n" >>= fun () ->
-       rv
+       Repository.create_thing ~thing_name ~text
     )
 
 

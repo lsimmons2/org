@@ -18,6 +18,7 @@ let thing_mapper (result : Postgresql.result) (row : int) : Models.thing =
         if text_val = "" then None else Some text_val
       else
         None;
+    (* text = (let text_val = result#getvalue row 2 in if text_val = "" then None else Some text_val); *)
     tags = [];  (* Tags will be fetched and populated later *)
 
   }
@@ -87,11 +88,7 @@ let create_thing ~thing_name ~text =
     | Some t -> [|thing_name; t|]
     | None -> [|thing_name;|]
   in
-
-  Lwt_io.printf "in create_thing with query: %s\n" query >>= fun () ->
-
   let rv = Db.query_and_map_single ~query:query ~params:params ~mapper:thing_mapper in
-
   Lwt.return rv
 
 
@@ -249,8 +246,7 @@ let delete_set set_id =
   try
     Ok (Sys.remove file_path);
   with
-  | Sys_error msg -> Printf.printf "Failed to remove file: %s\n" msg;
-    Error ("Failed to delete set: " ^ msg)
+  | Sys_error msg -> Error ("Failed to delete set: " ^ msg)
 
 (* SNIPPET - all this stuff *)
 let add_yes_tags_to_set tag_ids set =

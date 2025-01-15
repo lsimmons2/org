@@ -471,6 +471,34 @@ let test_set_whole_shebang () =
   let second_created_thing = parse_option_or_fail_test created_thing_payload.data in
 
 
+  Lwt.return_unit
+
+
+let test_foo () =
+
+  (* CREATE SET *)
+  let set_name = "todos" in
+  post_set_to_api ~name:set_name ()
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.set_of_yojson
+  >>= fun created_thing_payload ->
+  let created_set = parse_option_or_fail_test created_thing_payload.data in
+
+
+  (* CREATE THINGS *)
+  post_thing_to_api { name="first todo"; text = None }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload ->
+  let first_created_thing = parse_option_or_fail_test created_thing_payload.data in
+
+  post_thing_to_api { name="second todo"; text = None }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload ->
+  let second_created_thing = parse_option_or_fail_test created_thing_payload.data in
+
+
   (* CREATE TAGS *)
   post_tag_to_api { name="todo"; text=None }
   >>= fun (resp, body) ->

@@ -21,27 +21,12 @@ let db_connect env =
 let query_db (query: string) ?(params=[||]) () =
   let conn = db_connect `Test in
   let cleanup () = conn#finish in
-  try
-    let timestamp = string_of_float (Unix.gettimeofday ()) in
-    let statement_name = Printf.sprintf "stmt_%d_%s" (Hashtbl.hash query) timestamp in
-    (* Printf.printf "Preparing statement: %s with query: %s\n" statement_name query; *)
-    ignore(conn#prepare statement_name query);
-    (* Printf.printf "Executing prepared statement: %s\n" statement_name; *)
-    let result = conn#exec_prepared ~params statement_name in
-    cleanup ();
-    (* Printf.printf "Query executed successfully.\n"; *)
-    Ok result
-  with
-  | Postgresql.Error err ->
-    let err_msg = Printf.sprintf "PostgreSQL error: %s" (Postgresql.string_of_error err) in
-    cleanup ();
-    Printf.printf "Error during query execution: %s\n" err_msg;
-    Error err_msg
-  | exn ->
-    let err_msg = Printf.sprintf "Unexpected error: %s" (Printexc.to_string exn) in
-    cleanup ();
-    Printf.printf "Unexpected exception: %s\n" err_msg;
-    Error err_msg
+  let timestamp = string_of_float (Unix.gettimeofday ()) in
+  let statement_name = Printf.sprintf "stmt_%d_%s" (Hashtbl.hash query) timestamp in
+  ignore(conn#prepare statement_name query);
+  let result = conn#exec_prepared ~params statement_name in
+  cleanup ();
+  Ok result
 
 
 let query_and_map
@@ -56,9 +41,10 @@ let query_and_map
       Ok rows
     | Error err ->
       Error err
-  with 
+  with
   | Postgresql.Error e ->
     Error (Printf.sprintf "PostgreSQL error: %s" (Postgresql.string_of_error e))
+  (* TODO: should I just have Postgresql.Error catch block in this function? *)
   | exn -> Error (Printf.sprintf "Unexpected exception: %s" (Printexc.to_string exn))
 
 
