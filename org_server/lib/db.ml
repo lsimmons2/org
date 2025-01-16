@@ -9,17 +9,18 @@
 
 open Lwt.Infix
 
-let db_connect env =
+let db_connect () =
+  let env = Env.current_environment () in
   let (host, port, dbname, user, password) =
     match env with
-    | `Test -> ("127.0.0.1", "5433", "org_test", "leo",  "leo" )
-    | `Dev -> ( "127.0.0.1", "5433", "org", "leo", "leo" )
+    | Test -> ("127.0.0.1", "5433", "org_test", "leo",  "leo" )
+    | Dev -> ( "127.0.0.1", "5433", "org", "leo", "leo" )
   in
   new Postgresql.connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
 
 
 let query_db (query: string) ?(params=[||]) () =
-  let conn = db_connect `Test in
+  let conn = db_connect () in
   let cleanup () = conn#finish in
   let timestamp = string_of_float (Unix.gettimeofday ()) in
   let statement_name = Printf.sprintf "stmt_%d_%s" (Hashtbl.hash query) timestamp in

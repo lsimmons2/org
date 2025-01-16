@@ -53,17 +53,11 @@ let reset_db () =
   let truncate_table table =
     let query = "TRUNCATE TABLE " ^ table ^ " CASCADE;" in
     ignore(Org_lib.Db.query_db query ());
-    (* match Org_lib.Db.query_db query () with *)
-    (* | Ok _ -> *) (*   Lwt_io.printf "Query successful for table: %s\n" table *)
-    (* | Error err -> *)
-    (*   Lwt_io.printf "Query failed for table: %s with error: %s\n" table err *)
     Lwt.return_unit
   in
   let tables = ["tags"; "things"; "tags_to_things"; "time_blocks"] in
   Lwt_list.iter_s truncate_table tables >>= fun () ->
-  (* Lwt_io.printf "Alllll tables cleared successfully.\n" >>= fun () -> *)
-  let config = Org_lib.Env.get_config_for_env Test in
-  (* make_dir_if_not_exists config.set_db_dir; *)
+  let config = Org_lib.Env.get_config () in
   if not (Sys.file_exists config.set_db_dir) then
     Unix.mkdir config.set_db_dir 0o755;
   delete_files_in_directory config.set_db_dir;
@@ -470,33 +464,10 @@ let test_set_whole_shebang () =
   >>= fun created_thing_payload ->
   let second_created_thing = parse_option_or_fail_test created_thing_payload.data in
 
-
-  Lwt.return_unit
-
-
-let test_foo () =
-
-  (* CREATE SET *)
-  let set_name = "todos" in
-  post_set_to_api ~name:set_name ()
-  >>= fun (resp, body) ->
-  parse_payload body Org_lib.Models.set_of_yojson
-  >>= fun created_thing_payload ->
-  let created_set = parse_option_or_fail_test created_thing_payload.data in
-
-
-  (* CREATE THINGS *)
-  post_thing_to_api { name="first todo"; text = None }
+  post_thing_to_api { name="something that isn't a todo"; text = None }
   >>= fun (resp, body) ->
   parse_payload body Org_lib.Models.thing_of_yojson
   >>= fun created_thing_payload ->
-  let first_created_thing = parse_option_or_fail_test created_thing_payload.data in
-
-  post_thing_to_api { name="second todo"; text = None }
-  >>= fun (resp, body) ->
-  parse_payload body Org_lib.Models.thing_of_yojson
-  >>= fun created_thing_payload ->
-  let second_created_thing = parse_option_or_fail_test created_thing_payload.data in
 
 
   (* CREATE TAGS *)
@@ -549,42 +520,42 @@ let () =
   let open Alcotest_lwt in
   Lwt_main.run (
     run "Org Server Tests" [
-      (* "Ping Endpoint", [ *)
-      (*   test_case "Ping Test" `Quick ( *)
-      (*     fun _switch () -> *)
-      (*       reset_db () >>= fun () -> *)
-      (*       test_ping () *)
-      (*   ); *)
-      (* ]; *)
-      (* "Create and get things", [ *)
-      (*   test_case "Create and get things Test" `Quick ( *)
-      (*     fun _switch () -> *)
-      (*       Lwt_io.flush Lwt_io.stdout >>= fun () -> *)
-      (*       reset_db () >>= fun () -> *)
-      (*       test_create_and_get_thing_and_tag () *)
-      (*   ); *)
-      (* ]; *)
-      (* "Tag things", [ *)
-      (*   test_case "Should be able to create a thing and a tag and tag the thing" `Quick ( *)
-      (*     fun _switch () -> *)
-      (*       Lwt_io.flush Lwt_io.stdout >>= fun () -> *)
-      (*       reset_db () >>= fun () -> *)
-      (*       test_tag_thing () *)
-      (*   ); *)
-      (* ]; *)
-      (* "Remove tags from things", [ *)
-      (*   test_case "Should be able to tag a things with multiple tags, then delete only one of them" `Quick ( *)
-      (*     fun _switch () -> *)
-      (*       reset_db () >>= fun () -> *)
-      (*       test_remove_tag_from_thing () *)
-      (*   ); *)
-      (* ]; *)
+      "Ping Endpoint", [
+        test_case "Ping Test" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_ping ()
+        );
+      ];
+      "Create and get things", [
+        test_case "Create and get things Test" `Quick (
+          fun _switch () ->
+            Lwt_io.flush Lwt_io.stdout >>= fun () ->
+            reset_db () >>= fun () ->
+            test_create_and_get_thing_and_tag ()
+        );
+      ];
+      "Tag things", [
+        test_case "Should be able to create a thing and a tag and tag the thing" `Quick (
+          fun _switch () ->
+            Lwt_io.flush Lwt_io.stdout >>= fun () ->
+            reset_db () >>= fun () ->
+            test_tag_thing ()
+        );
+      ];
+      "Remove tags from things", [
+        test_case "Should be able to tag a things with multiple tags, then delete only one of them" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_remove_tag_from_thing ()
+        );
+      ];
       "Creating sets", [
-        (* test_case "should be able to create sets with incrementing ids, and add tags to them" `Quick ( *)
-        (*   fun _switch () -> *)
-        (*     reset_db () >>= fun () -> *)
-        (*     test_create_set_and_add_tags () *)
-        (* ); *)
+        test_case "should be able to create sets with incrementing ids, and add tags to them" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_create_set_and_add_tags ()
+        );
         test_case "should be able to create set, have them return correct things in simple set of yes and no ids" `Quick (
           fun _switch () ->
             reset_db () >>= fun () ->

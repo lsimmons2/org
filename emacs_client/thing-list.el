@@ -7,22 +7,25 @@
 
 (defun render-thing-list (things)
   "Render a list of THINGS in the current buffer using a tabulated list."
-  (let ((inhibit-read-only t)) ;; Temporarily disable read-only mode
+  (let ((inhibit-read-only t))
     (erase-buffer)
-    ;; Configure the tabulated list format
-    (setq tabulated-list-format
-          [("Name" 30 t)     ;; Column for the Name
-           ("Text" 50 nil)]) ;; Column for the Text
-    (setq tabulated-list-entries
-          (mapcar (lambda (thing)
-                    (let ((id (alist-get 'id thing))
-                          (name (alist-get 'name thing))
-                          (text (alist-get 'text thing)))
-                      (list id (vector name text))))
-                  things))
-    ;; Use `tabulated-list-mode` to render the table
-    (tabulated-list-init-header) ;; Initialize the header
-    (tabulated-list-print t)))   ;; Render the entries
+    (if (not things)
+	(insert "*** No things created yet ***\n")
+      (progn
+	(setq tabulated-list-format
+              [("Id" 15 t)
+	       ("Name" 30 t)
+               ("Text" 50 nil)])
+	(setq tabulated-list-entries
+              (mapcar (lambda (thing)
+			(let ((id (alist-get 'id thing))
+                              (name (alist-get 'name thing))
+                              (text (or (alist-get 'text thing) "-")))
+			  (list id (vector (number-to-string id) name text))))
+                      things))
+	(tabulated-list-init-header)
+	(tabulated-list-print t)))
+    ))
 
 
 

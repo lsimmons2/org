@@ -123,7 +123,7 @@ let untag_thing ~tag_id ~thing_id =
 
 
 
-let config = Env.get_config
+let config = Env.get_config ()
 
 
 let get_set_file_path set_id =

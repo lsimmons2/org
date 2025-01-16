@@ -23,6 +23,40 @@
 		(message "Error creating set: %s" error-thrown)
 		(message "Server response: %s" response-body))))))
 
+(defun create-thing (name text callback)
+  " create thing with NAME and TEXT and CALLBACK" 
+  (request
+    (concat api-base-url "/things")
+    :type "POST"
+    :headers '(("Content-Type" . "application/json"))
+    :data (json-encode `(("name" . ,name) ("text" . ,text)))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys)
+		(funcall callback (alist-get 'data data))))
+    :error (cl-function
+            (lambda (&key error-thrown response &allow-other-keys)
+              (let ((response-body (request-response-data response)))
+		(message "Error creating thing: %s" error-thrown)
+		(message "Server response: %s" response-body))))))
+
+(defun create-tag (name text callback)
+  " create tag with NAME and TEXT and CALLBACK" 
+  (request
+    (concat api-base-url "/tags")
+    :type "POST"
+    :headers '(("Content-Type" . "application/json"))
+    :data (json-encode `(("name" . ,name) ("text" . ,text)))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys)
+		(funcall callback (alist-get 'data data))))
+    :error (cl-function
+            (lambda (&key error-thrown response &allow-other-keys)
+              (let ((response-body (request-response-data response)))
+		(message "Error creating tag: %s" error-thrown)
+		(message "Server response: %s" response-body))))))
+
 (defun fetch-things (callback)
   "Fetch a list of things from the API and call CALLBACK with the result."
 
@@ -38,6 +72,31 @@
 	    (lambda (&key error-thrown &allow-other-keys)
 	      (message "Error fetching things: %s" error-thrown)))))
 
+
+(defun fetch-sets (callback)
+  (request
+    (concat api-base-url "/sets")
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys)
+		(funcall callback (alist-get 'data data))))
+    :error (cl-function
+	    (lambda (&key error-thrown &allow-other-keys)
+	      (message "Error fetching sets: %s" error-thrown)))))
+
+
+(defun fetch-set (id callback)
+  (request
+    (concat api-base-url (format "/sets/%d" id))
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys)
+		(funcall callback (alist-get 'data data))))
+    :error (cl-function
+	    (lambda (&key error-thrown &allow-other-keys)
+	      (message "Error fetching set: %s" error-thrown)))))
 
 (defun fetch-tags (callback)
 

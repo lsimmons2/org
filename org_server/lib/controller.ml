@@ -81,6 +81,7 @@ let generate_get_endpoint
           Lwt_io.printf "returning data %s\n" json_str >>= fun () ->
           Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
         | Error err ->
+          Lwt_io.printf "Error in endpoint %s\n" err >>= fun () ->
           let json_str = gen_api_resp_str false "my bad" None to_json in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
 

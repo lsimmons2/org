@@ -28,10 +28,7 @@
                   nil))))
     (if (string-empty-p name)
         (message "Name field must be filled.")
-      (funcall create-entity-callback name (if (string-empty-p text) nil text)
-	       (lambda (response)
-                 (message "Entity created successfully: %s"
-                          (alist-get 'id response)))))))
+      (funcall create-entity-callback name (if (string-empty-p text) nil text)))))
 
 (defun create-entity-cancel ()
   "Cancel the form and close the buffer."

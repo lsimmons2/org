@@ -51,5 +51,5 @@
 	 )))
     (switch-to-buffer buffer)))
 
+
 (provide 'thing-details)
-;;; thing-details.el ends here

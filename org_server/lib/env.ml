@@ -19,6 +19,7 @@ let test_config = {
 let current_environment () =
   match Sys.getenv_opt "ORG_ENV" with
   | Some "dev" -> Dev
+  | Some "development" -> Dev
   | Some "test" -> Test
   | _ -> Dev  (* Default to Dev if not specified *)
 
@@ -28,11 +29,8 @@ let string_of_env env =
   | Test -> "test"
 
 
-let get_config_for_env env =
+let get_config () =
+  let env = current_environment () in
   match env with
   | Dev -> dev_config
   | Test -> test_config
-
-let get_config =
-  let env = current_environment () in
-  get_config_for_env env

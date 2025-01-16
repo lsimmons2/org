@@ -14,13 +14,26 @@
   (evil-define-key 'normal tag-list-mode-map (kbd "RET") #'tag-list-visit-entry))
 
 (defun render-tag-list (tags)
-  "Render a list of TAGS in the current buffer."
-  (erase-buffer)
-  (dolist (tag tags)
-    (insert-text-button
-     (format "Tag: %s\n" (alist-get 'name tag))
-     'action (lambda (_) (view-tag-details (alist-get 'id tag)))
-     'follow-link t)))
+  "Render a list of TAGS in the current buffer using a tabulated list."
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (if (not tags)
+	(insert "*** No tags created yet ***\n")
+      (progn
+	(setq tabulated-list-format
+              [("Id" 15 t)
+	       ("Name" 30 t)
+               ("Text" 50 nil)])
+	(setq tabulated-list-entries
+              (mapcar (lambda (tag)
+			(let ((id (alist-get 'id tag))
+                              (name (alist-get 'name tag))
+                              (text (or (alist-get 'text tag) "-")))
+			  (list id (vector (number-to-string id) name text))))
+                      tags))
+	(tabulated-list-init-header)
+	(tabulated-list-print t)))
+    ))
 
 (defun view-tag-list ()
   "Display a list of tags."
@@ -29,14 +42,13 @@
   (let ((buffer (get-buffer-create "*Tags*")))
     (with-current-buffer buffer
       (tag-list-mode)
-      ;; (local-set-key (kbd "RET") #'thing-list-visit-entry)
 
       (fetch-tags
        (lambda (data)
          (with-current-buffer buffer
 	   (setq tags (append data nil)) ;; Converts `data` to a list
 
-           (render-thing-list tags)))))
+           (render-tag-list tags)))))
     (switch-to-buffer buffer)))
 
 (provide 'tag-list)
