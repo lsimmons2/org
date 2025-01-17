@@ -38,9 +38,29 @@
       (message "No entry selected!"))))
 
 
+(defun set-list-delete-entry ()
+  (interactive)
+  (message "deleting set")
+  (let (
+	(id (tabulated-list-get-id))
+	(entry (tabulated-list-get-entry))
+	)
+    (if (and id entry)
+	(view-confirm-screen
+	 (format "Delete set %s?" (aref entry 2))
+         (lambda () 
+	   (message (format "deleting set %d" id))
+	   (delete-set id (lambda () (view-set-list)))
+	   )
+         (lambda () (message "aborting delete"))
+	 )
+      (message "No entry selected!"))))
+
+
 (define-derived-mode set-list-mode base-list-mode "SetList"
   "Mode for viewing a list of sets."
-  (evil-define-key 'normal set-list-mode-map (kbd "RET") #'set-list-visit-entry))
+  (evil-define-key 'normal set-list-mode-map (kbd "RET") #'set-list-visit-entry)
+  (evil-define-key 'normal set-list-mode-map (kbd "d") #'set-list-delete-entry))
 
 
 (defun view-set-list ()

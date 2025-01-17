@@ -19,18 +19,12 @@ let test_ping () =
 (* SNIPPET *)
 let delete_files_in_directory dir =
   try
-    (* List all files in the directory *)
     let files = Sys.readdir dir in
     Array.iter (fun file ->
         let file_path = Filename.concat dir file in
-        if Sys.is_directory file_path then
-          Printf.printf "Skipping directory: %s\n" file_path
-        else
-          (* Remove the file *)
+        if not (Sys.is_directory file_path) then
           Unix.unlink file_path;
-        Printf.printf "Deleted file: %s\n" file_path
       ) files;
-    Printf.printf "All files in %s have been deleted.\n" dir
   with
   | Sys_error msg -> Printf.eprintf "Error clearing directory: %s\n" msg
   | Unix.Unix_error (err, func, arg) ->
@@ -173,6 +167,11 @@ let tag_thing_in_api ~(tag_id: int) ~(thing_id: int) =
   let headers = Cohttp.Header.init_with "Content-Type" "application/json" in
   let body = Cohttp_lwt.Body.of_string json_payload in
   Cohttp_lwt_unix.Client.post ~headers ~body uri
+
+
+let delete_tag_from_api tag_id =
+  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/tags/%d" tag_id) in
+  Cohttp_lwt_unix.Client.delete uri
 
 
 let assert_http_status resp status =
@@ -440,6 +439,74 @@ let test_create_set_and_add_tags () =
   Lwt.return_unit
 
 
+let test_delete_tag () =
+
+  (* CREATE SET *)
+  let set_name = "todos" in
+  post_set_to_api ~name:set_name ()
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.set_of_yojson
+  >>= fun created_thing_payload ->
+  let created_set = parse_option_or_fail_test created_thing_payload.data in
+
+  (* CREATE THINGS *)
+  post_thing_to_api { name="first todo"; text = None }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload ->
+  let first_created_thing = parse_option_or_fail_test created_thing_payload.data in
+
+  post_thing_to_api { name="second todo"; text = None }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload ->
+  let second_created_thing = parse_option_or_fail_test created_thing_payload.data in
+
+
+  (* CREATE TAGS *)
+  post_tag_to_api { name="todo"; text=None }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun created_tag_payload ->
+  let todo_tag = parse_option_or_fail_test created_tag_payload.data in
+
+  post_tag_to_api { name="done"; text=None }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun created_tag_payload ->
+  let done_tag = parse_option_or_fail_test created_tag_payload.data in
+
+
+  (* ADD IDS TO SET *)
+  let yes_ids_to_add = [todo_tag.id] in
+  let no_ids_to_add = [done_tag.id] in
+  put_set_to_api created_set.id ~yes_ids_to_add:yes_ids_to_add ~no_ids_to_add:no_ids_to_add ()
+  >>= fun (resp, body) ->
+
+  (* TAG THINGS *)
+  tag_thing_in_api ~tag_id:todo_tag.id ~thing_id:first_created_thing.id
+  >>= fun (resp, body) ->
+  tag_thing_in_api ~tag_id:done_tag.id ~thing_id:first_created_thing.id
+  >>= fun (resp, body) ->
+  tag_thing_in_api ~tag_id:todo_tag.id ~thing_id:second_created_thing.id
+  >>= fun (resp, body) ->
+
+  (* DELETE TAG *)
+  delete_tag_from_api done_tag.id
+  >>= fun (resp, body) ->
+
+  (* GET SET *)
+  get_set_from_api created_set.id
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.set_of_yojson
+  >>= fun set_payload ->
+  let set = parse_option_or_fail_test set_payload.data in
+
+  Alcotest.(check int) "there should be 2 things in set" 2 (List.length set.things);
+
+  Lwt.return_unit
+
+
 let test_set_whole_shebang () =
 
   (* CREATE SET *)
@@ -527,7 +594,7 @@ let () =
             test_ping ()
         );
       ];
-      "Create and get things", [
+      "Things", [
         test_case "Create and get things Test" `Quick (
           fun _switch () ->
             Lwt_io.flush Lwt_io.stdout >>= fun () ->
@@ -535,22 +602,25 @@ let () =
             test_create_and_get_thing_and_tag ()
         );
       ];
-      "Tag things", [
+      "Tags", [
         test_case "Should be able to create a thing and a tag and tag the thing" `Quick (
           fun _switch () ->
             Lwt_io.flush Lwt_io.stdout >>= fun () ->
             reset_db () >>= fun () ->
             test_tag_thing ()
         );
-      ];
-      "Remove tags from things", [
         test_case "Should be able to tag a things with multiple tags, then delete only one of them" `Quick (
           fun _switch () ->
             reset_db () >>= fun () ->
             test_remove_tag_from_thing ()
         );
+        test_case "Should be able to delete tags - and have them be removed from sets" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_delete_tag ()
+        );
       ];
-      "Creating sets", [
+      "Sets", [
         test_case "should be able to create sets with incrementing ids, and add tags to them" `Quick (
           fun _switch () ->
             reset_db () >>= fun () ->

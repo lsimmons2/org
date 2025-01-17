@@ -14,6 +14,7 @@
 (require 'create-tag-form)
 
 (require 'editable-buffer)
+(require 'confirm-screen)
 
 (message "main.el loaded all files")
 

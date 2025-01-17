@@ -93,8 +93,10 @@ let generate_delete_endpoint
     controller uri >>= (function
         | Ok rv ->
           let json_str = gen_api_resp_str_no_data true "gucci deleted" in
+          Lwt_io.printf "returning data %s\n" json_str >>= fun () ->
           Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
         | Error err ->
+          Lwt_io.printf "Error in endpoint %s\n" err >>= fun () ->
           let json_str = gen_api_resp_str_no_data false "my bad" in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
 
@@ -145,8 +147,10 @@ let generate_put_endpoint
       controller uri parsed_body >>= (function
           | Ok rv ->
             let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
+            Lwt_io.printf "Returning data from endpoint: %s\n" json_str >>= fun () ->
             Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
           | Error err ->
+            Lwt_io.printf "Error in controller function: %s\n" err >>= fun () ->
             let json_str = gen_api_resp_str false "my bad" None to_json in
             Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
     | Error json_body_parse_err ->
@@ -249,6 +253,32 @@ let untag_thing_endpoint
     )
 
 
+let delete_thing_endpoint
+  : delete_endpoint
+  = generate_delete_endpoint
+    (fun uri ->
+
+       let path = Uri.path uri in
+       let matches = Re.exec things_id_regex path in
+       let thing_id_str = Re.Group.get matches 1 in
+       let thing_id = int_of_string thing_id_str in
+
+       Lwt.return (Repository.delete_thing thing_id)
+    )
+
+
+let delete_tag_endpoint
+  : delete_endpoint
+  = generate_delete_endpoint
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec tag_id_regex path in
+       let tag_id_str = Re.Group.get matches 1 in
+       let tag_id = int_of_string tag_id_str in
+
+       Lwt.return (Repository.delete_tag tag_id)
+    )
+
 let create_set_endpoint
   : post_endpoint
   = generate_post_endpoint
@@ -286,7 +316,7 @@ let delete_set_endpoint
   = generate_delete_endpoint
     (fun uri ->
        let path = Uri.path uri in
-       let matches = Re.exec untag_thing_regex path in
+       let matches = Re.exec specific_set_path_regex path in
        let set_id_str = Re.Group.get matches 1 in
        let set_id = int_of_string set_id_str in
        Lwt.return (Repository.delete_set set_id))
@@ -311,11 +341,12 @@ let update_set_endpoint
        let no_ids_to_remove = set_body.Models.no_ids_to_remove in
        let rv = Repository.update_set
            set_id
-           ~name
-           ~text
-           ~yes_ids_to_add
-           ~yes_ids_to_remove
-           ~no_ids_to_add
-           ~no_ids_to_remove
+           ?name:(name)
+           ?text:(text)
+           ?yes_ids_to_add:(yes_ids_to_add)
+           ?yes_ids_to_remove:(yes_ids_to_remove)
+           ?no_ids_to_add:(no_ids_to_add)
+           ?no_ids_to_remove:(no_ids_to_remove)
+           ()
        in
        Lwt.return rv)

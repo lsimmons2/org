@@ -20,14 +20,19 @@ let db_connect () =
 
 
 let query_db (query: string) ?(params=[||]) () =
-  let conn = db_connect () in
-  let cleanup () = conn#finish in
-  let timestamp = string_of_float (Unix.gettimeofday ()) in
-  let statement_name = Printf.sprintf "stmt_%d_%s" (Hashtbl.hash query) timestamp in
-  ignore(conn#prepare statement_name query);
-  let result = conn#exec_prepared ~params statement_name in
-  cleanup ();
-  Ok result
+  try
+    let conn = db_connect () in
+    let cleanup () = conn#finish in
+    let timestamp = string_of_float (Unix.gettimeofday ()) in
+    let statement_name = Printf.sprintf "stmt_%d_%s" (Hashtbl.hash query) timestamp in
+    ignore(conn#prepare statement_name query);
+    let result = conn#exec_prepared ~params statement_name in
+    cleanup ();
+    Ok result
+  with
+  | Postgresql.Error e ->
+    Error (Printf.sprintf "PostgreSQL error: %s" (Postgresql.string_of_error e))
+  | exn -> Error (Printf.sprintf "Unexpected exception: %s" (Printexc.to_string exn))
 
 
 let query_and_map

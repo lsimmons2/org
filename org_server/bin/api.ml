@@ -41,12 +41,16 @@ let router _conn req body =
        | (`POST, "/things") -> Org_lib.Controller.create_thing_endpoint body
        | (`GET, path) when Re.execp Controller.things_id_regex path ->
          Org_lib.Controller.get_thing_endpoint uri
+       | (`DELETE, path) when Re.execp Controller.things_id_regex path ->
+         Org_lib.Controller.delete_thing_endpoint uri
 
 
        | (`GET, "/tags") -> Org_lib.Controller.get_tags_endpoint uri
        | (`POST, "/tags") -> Org_lib.Controller.create_tag_endpoint body
        | (`GET, path) when Re.execp Controller.tag_id_regex path ->
          Org_lib.Controller.get_tag_endpoint uri
+       | (`DELETE, path) when Re.execp Controller.tag_id_regex path ->
+         Org_lib.Controller.delete_tag_endpoint uri
 
        | (`POST, "/tag-to-thing") -> Org_lib.Controller.tag_thing_endpoint body
        | (`DELETE, path) when Re.execp Controller.untag_thing_regex path ->
@@ -62,7 +66,11 @@ let router _conn req body =
        | (`DELETE, path) when Re.execp Controller.specific_set_path_regex path ->
          Org_lib.Controller.delete_set_endpoint uri
 
-       | _ -> Server.respond_string ~status:`Not_found ~body:"Not Found" ())
+       | _ -> (
+           Lwt_io.printf "404 not found!\n" >>= fun () ->
+           Server.respond_string ~status:`Not_found ~body:"Not Found" ()
+         )
+    )
     (fun exn ->
        (* Log the exception *)
        let error_message = Printexc.to_string exn in

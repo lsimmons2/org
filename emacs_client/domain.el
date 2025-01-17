@@ -137,4 +137,42 @@
 	    (lambda (&key error-thrown &allow-other-keys)
 	      (message "Error fetching thing: %s" error-thrown)))))
 
+
+(defun delete-thing (id callback)
+  (request
+    (concat api-base-url (format "/things/%d" id))
+    :type "DELETE"
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys) (funcall callback)))
+    :error (cl-function
+	    (lambda (&key error-thrown &allow-other-keys)
+	      (message "Error fetching thing: %s" error-thrown)))))
+
+
+(defun delete-tag (id callback)
+  (request
+    (concat api-base-url (format "/tags/%d" id))
+    :type "DELETE"
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys) (funcall callback)))
+    :error (cl-function
+	    (lambda (&key error-thrown &allow-other-keys)
+	      (message "Error deleting tag: %s" error-thrown)))))
+
+(defun delete-set (id callback)
+  (request
+    (concat api-base-url (format "/sets/%d" id))
+    :type "DELETE"
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys) (funcall callback)))
+    :error (cl-function
+	    (lambda (&key error-thrown &allow-other-keys)
+	      (message "Error deleting set: %s" error-thrown)))))
+
 (provide 'domain) ;; Makes the API functions available to other files

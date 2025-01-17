@@ -61,6 +61,14 @@ let get_thing thing_id : (Models.thing, string) result =
     Error ("Failed to fetch thing: " ^ err)
 
 
+let delete_thing thing_id : (unit, string) result =
+  let query = "DELETE from things WHERE id = $1" in
+  let params = [|string_of_int thing_id|] in
+  match Db.query_db query ~params:params () with
+  | Ok _ -> Ok ()
+  | Error err -> Error (Printf.sprintf "this be an error: %s" err)
+
+
 (* let get_thing thing_id : (Models.thing, string) result =  *)
 (*   let query = "SELECT id, name, text FROM things WHERE id = $1" in *)
 (*   Db.query_and_map_single ~query:query ~params:[|string_of_int thing_id|] ~mapper:thing_mapper *)
@@ -176,8 +184,6 @@ let create_set ~name ~text =
     )
 
 
-
-
 let get_things_for_yes_and_no_tag_ids yes_tag_ids no_tag_ids =
   let int_list_to_pg_array lst =
     "{" ^ (String.concat "," (List.map string_of_int lst)) ^ "}"
@@ -248,85 +254,111 @@ let delete_set set_id =
   with
   | Sys_error msg -> Error ("Failed to delete set: " ^ msg)
 
+
 (* SNIPPET - all this stuff *)
 let add_yes_tags_to_set tag_ids set =
   let new_yes_tag_ids =
-    match tag_ids with
-    | Some ids -> List.fold_left 
-                    (fun acc tag_id -> if List.mem tag_id acc then acc else tag_id :: acc)
-                    set.Models.yes_tag_ids
-                    ids
-    | None -> set.yes_tag_ids
+    List.fold_left 
+      (fun acc tag_id -> if List.mem tag_id acc then acc else tag_id :: acc)
+      set.Models.yes_tag_ids
+      tag_ids
   in
   {set with yes_tag_ids = new_yes_tag_ids }
 
 
 let remove_yes_tags_from_set tag_ids set =
   let new_yes_tag_ids =
-    match tag_ids with
-    | Some ids ->
-      List.filter (fun tag_id -> not (List.mem tag_id ids)) set.Models.yes_tag_ids
-    | None -> set.yes_tag_ids
+    List.filter (fun tag_id -> not (List.mem tag_id tag_ids)) set.Models.yes_tag_ids
   in
   {set with yes_tag_ids = new_yes_tag_ids }
 
 
 let add_no_tags_to_set tag_ids set =
   let new_no_tag_ids =
-    match tag_ids with
-    | Some ids ->
-      List.fold_left 
-        (fun acc tag_id -> if List.mem tag_id acc then acc else tag_id :: acc)
-        set.Models.no_tag_ids
-        ids
-    | None -> set.no_tag_ids
+    List.fold_left 
+      (fun acc tag_id -> if List.mem tag_id acc then acc else tag_id :: acc)
+      set.Models.no_tag_ids
+      tag_ids
   in
   {set with no_tag_ids = new_no_tag_ids }
 
 
 let remove_no_tags_from_set tag_ids set =
+  let first_tag_id = List.hd tag_ids in
   let new_no_tag_ids =
-    match tag_ids with
-    | Some ids -> 
-      List.filter (fun tag_id -> not (List.mem tag_id ids)) set.Models.no_tag_ids
-    | None -> set.no_tag_ids
+    List.filter (fun tag_id -> not (List.mem tag_id tag_ids)) set.Models.no_tag_ids
   in
   {set with no_tag_ids = new_no_tag_ids }
 
 
 let update_set_name name (set: Models.set) =
-  match name with
-  | Some new_name -> { set with name = new_name }
-  | None -> set
+  { set with name = name }
 
 
 let update_set_text text (set: Models.set) =
-  match text with
-  | Some new_text -> { set with text = Some new_text }
-  | None -> set
+  { set with text = Some text }
 
 
 let update_set
     set_id
-    ~name
-    ~text
-    ~yes_ids_to_add
-    ~yes_ids_to_remove
-    ~no_ids_to_add
-    ~no_ids_to_remove
+    ?name
+    ?text
+    ?yes_ids_to_add
+    ?yes_ids_to_remove
+    ?no_ids_to_add
+    ?no_ids_to_remove
+    ()
   =
   let file_path = get_set_file_path set_id in
   match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
   | Ok set ->
+
     let updated_set =
       set
-      |> update_set_name name
-      |> update_set_text text
-      |> add_yes_tags_to_set yes_ids_to_add
-      |> remove_yes_tags_from_set yes_ids_to_remove
-      |> add_no_tags_to_set no_ids_to_add
-      |> remove_no_tags_from_set no_ids_to_remove
+      |> (fun s -> match name with Some n -> update_set_name n s | None -> s)
+      |> (fun s -> match text with Some t -> update_set_text t s | None -> s)
+      |> (fun s -> match yes_ids_to_add with Some ids -> add_yes_tags_to_set ids s | None -> s)
+      |> (fun s -> match yes_ids_to_remove with Some ids -> remove_yes_tags_from_set ids s | None -> s)
+      |> (fun s -> match no_ids_to_add with Some ids -> add_no_tags_to_set ids s | None -> s)
+      |> (fun s -> match no_ids_to_remove with Some ids -> remove_no_tags_from_set ids s | None -> s)
     in
+
     Yojson.Safe.to_file file_path (Models.set_to_yojson updated_set);
     Ok updated_set
   | Error err -> Error err
+
+
+let remove_tag_from_sets tag_id : (unit, string) result =
+  (* Ok () *)
+  match (get_all_sets ()) with
+  | Ok sets -> (
+      let results = List.map (
+          fun s ->
+            update_set
+              s.Models.id
+              ~yes_ids_to_remove:[tag_id]
+              ~no_ids_to_remove:[tag_id]
+              ()
+        ) sets in
+      let errors = List.filter_map (function
+          | Error e -> Some e
+          | Ok _ -> None
+        ) results in
+      match errors with
+      | [] -> Ok ()
+      | errs -> Error (String.concat ", " errs)
+    )
+  | Error err -> Error err
+
+
+let delete_tag tag_id =
+  match remove_tag_from_sets tag_id with
+  | Ok _ -> (
+      let query = "DELETE FROM tags WHERE id = $1" in
+      let params = [|(string_of_int tag_id)|] in
+      match Db.query_db query ~params:params () with
+      | Ok _ -> Ok ()
+      | Error err -> Error err
+    )
+  | Error err -> Error err
+

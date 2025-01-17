@@ -9,9 +9,29 @@
         (view-tag-details id)
       (message "No entry selected!"))))
 
+(defun tag-list-delete-entry ()
+  (interactive)
+  (message "deleting tag")
+  (let (
+	(id (tabulated-list-get-id))
+	(entry (tabulated-list-get-entry))
+	)
+    (if (and id entry)
+	(view-confirm-screen
+	 (format "Delete tag %s?" (aref entry 2))
+         (lambda () 
+	   (message (format "deleting thing %d" id))
+	   (delete-tag id (lambda () (view-tag-list)))
+	   )
+         (lambda () (message "aborting delete"))
+	 )
+      (message "No entry selected!"))))
+
 (define-derived-mode tag-list-mode base-list-mode "TagList"
   "Major mode for listing tags."
-  (evil-define-key 'normal tag-list-mode-map (kbd "RET") #'tag-list-visit-entry))
+  (message "creating tag-list-mode!")
+  (evil-define-key 'normal tag-list-mode-map (kbd "RET") #'tag-list-visit-entry)
+  (evil-define-key 'normal tag-list-mode-map (kbd "d") #'tag-list-delete-entry))
 
 (defun render-tag-list (tags)
   "Render a list of TAGS in the current buffer using a tabulated list."

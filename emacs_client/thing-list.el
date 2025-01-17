@@ -39,9 +39,26 @@
       (message "No entry selected!"))))
 
 
+
+(defun thing-list-delete-entry ()
+  (interactive)
+  (let ((id (tabulated-list-get-id)))
+    (if id
+	(view-confirm-screen
+	 (format "Delete thing %d?" id)
+         (lambda () 
+	   (message (format "deleting thing %d" id))
+	   (delete-thing id (lambda () (view-thing-list)))
+	   )
+         (lambda () (message "aborting delete"))
+	 )
+      (message "No entry selected!"))))
+
+
 (define-derived-mode thing-list-mode base-list-mode "ThingList"
   "Mode for viewing a list of things."
-  (evil-define-key 'normal thing-list-mode-map (kbd "RET") #'thing-list-visit-entry))
+  (evil-define-key 'normal thing-list-mode-map (kbd "RET") #'thing-list-visit-entry)
+  (evil-define-key 'normal thing-list-mode-map (kbd "d") #'thing-list-delete-entry))
 
 
 (defun view-thing-list ()
