@@ -38,9 +38,13 @@ let router _conn req body =
        | (`GET, "/ping") -> Server.respond_string ~status:`OK ~body:("pong") ()
 
        | (`GET, "/things") -> Org_lib.Controller.get_things_endpoint uri
+       | (`GET, path) when Re.execp Controller.thing_available_tags_regex path ->
+         Org_lib.Controller.get_things_available_tags_endpoint uri
        | (`POST, "/things") -> Org_lib.Controller.create_thing_endpoint body
        | (`GET, path) when Re.execp Controller.things_id_regex path ->
          Org_lib.Controller.get_thing_endpoint uri
+       | (`PUT, path) when Re.execp Controller.things_id_regex path ->
+         Org_lib.Controller.update_thing_endpoint uri body
        | (`DELETE, path) when Re.execp Controller.things_id_regex path ->
          Org_lib.Controller.delete_thing_endpoint uri
 
@@ -61,10 +65,14 @@ let router _conn req body =
        | (`GET, "/sets") -> Org_lib.Controller.get_sets_endpoint uri
        | (`GET, path) when Re.execp Controller.specific_set_path_regex path ->
          Org_lib.Controller.get_set_endpoint uri
+
+
+       | (`GET, path) when Re.execp Controller.set_available_tags_regex path ->
+         Org_lib.Controller.get_set_available_tags_endpoint uri
+
        | (`PUT, path) when Re.execp Controller.specific_set_path_regex path ->
          Org_lib.Controller.update_set_endpoint uri body
-       | (`DELETE, path) when Re.execp Controller.specific_set_path_regex path ->
-         Org_lib.Controller.delete_set_endpoint uri
+       | (`DELETE, path) when Re.execp Controller.specific_set_path_regex path -> Org_lib.Controller.delete_set_endpoint uri
 
        | _ -> (
            Lwt_io.printf "404 not found!\n" >>= fun () ->

@@ -19,6 +19,7 @@ type create_thing_body = {name:string; text:string option;} [@@deriving yojson]
 type create_tag_body = {name:string; text:string option;} [@@deriving yojson]
 type tag_thing_body = {tag_id:int; thing_id:int} [@@deriving yojson]
 type create_set_body = {name:string; text:string option;} [@@deriving yojson]
+
 type update_set_body = {
   name: string option;
   text: string option;
@@ -26,4 +27,19 @@ type update_set_body = {
   yes_ids_to_remove: int list option;
   no_ids_to_add: int list option;
   no_ids_to_remove: int list option;
+} [@@deriving yojson]
+
+type update_thing_body = {
+  name: string option;
+  text: string option;
+} [@@deriving yojson]
+
+
+type set_rest = {
+  id:int;
+  name: string;
+  text: string option;
+  yes_tags: tag list;
+  no_tags: tag list;
+  things: thing list;
 } [@@deriving yojson]

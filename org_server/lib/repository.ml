@@ -226,6 +226,52 @@ let get_set set_id: (Models.set, string) result =
     Error (Printf.sprintf "no set with id %d found" set_id)
 
 
+
+let get_set_rest set_id: (Models.set_rest, string) result =
+  let file_path = get_set_file_path set_id in
+  if Sys.file_exists file_path then
+    match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
+    (* TODO: why doesn't returning error from set_of_* yojson function work? *)
+    (* TODO: should this function return a result or an option? *)
+    | Ok d -> (
+        let things_res = get_things_for_yes_and_no_tag_ids d.yes_tag_ids d.no_tag_ids in
+
+        let yes_tags_res =
+          List.fold_left (fun acc x ->
+              match acc, x with
+              | Error e, _ -> Error e
+              | _, Error e -> Error e
+              | Ok acc_list, Ok v -> Ok (v :: acc_list)
+            ) (Ok []) (List.map get_tag d.yes_tag_ids)
+        in
+        let no_tags_res =
+          List.fold_left (fun acc x ->
+              match acc, x with
+              | Error e, _ -> Error e
+              | _, Error e -> Error e
+              | Ok acc_list, Ok v -> Ok (v :: acc_list)
+            ) (Ok []) (List.map get_tag d.no_tag_ids)
+        in
+
+        match things_res, yes_tags_res, no_tags_res with
+        | Ok things, Ok yes_tags, Ok no_tags ->
+          (Ok {
+              id = d.id;
+              name = d.name;
+              text = d.text;
+              things = things;
+              yes_tags = yes_tags;
+              no_tags = no_tags;
+            })
+        | Error e, _, _ -> Error e
+        | _, Error e, _ -> Error e
+        | _, _, Error e -> Error e
+      )
+    | Error err -> Error err
+  else
+    Error (Printf.sprintf "no set with id %d found" set_id)
+
+
 let get_all_sets () =
   try
     let file_names =
@@ -328,12 +374,36 @@ let update_set
   | Error err -> Error err
 
 
+let update_thing thing_id ?name ?text () =
+  Lwt_io.printf "in update_thing! \n" >>= fun () ->
+
+  let query =
+    match (name, text) with
+    | (Some _, Some _) -> "UPDATE things SET name = $1, text = $2 WHERE id = $3 RETURNING id, name, text"
+    | (Some _, None) -> "UPDATE things SET name = $1 WHERE id = $2 RETURNING id, name, text"
+    | (None, Some _) -> "UPDATE things SET text = $1 WHERE id = $2 RETURNING id, name, text"
+    | (None, None) -> failwith "At least one of name or text must be provided"
+  in
+  let params =
+    match (name, text) with
+    | (Some n, Some t) -> [| n; t; string_of_int thing_id |]
+    | (Some n, None) -> [| n; string_of_int thing_id |]
+    | (None, Some t) -> [| t; string_of_int thing_id |]
+    | (None, None) -> [| |]  (* This case won't occur due to failwith above *)
+  in
+
+  Lwt_io.printf "after deifning params!! \n" >>= fun () ->
+
+  let rv = Db.query_and_map_single ~query:query ~params:params ~mapper:thing_mapper in
+  Lwt.return rv
+
+
 let remove_tag_from_sets tag_id : (unit, string) result =
   (* Ok () *)
   match (get_all_sets ()) with
   | Ok sets -> (
       let results = List.map (
-          fun s ->
+          fun (s: Models.set) ->
             update_set
               s.Models.id
               ~yes_ids_to_remove:[tag_id]
@@ -362,3 +432,30 @@ let delete_tag tag_id =
     )
   | Error err -> Error err
 
+
+let get_tags_available_for_thing thing_id =
+
+  let query = {|
+    SELECT tags.*
+    FROM tags
+    LEFT JOIN tags_to_things ON tags.id = tags_to_things.tag_id AND tags_to_things.thing_id = $1
+    WHERE tags_to_things.tag_id IS NULL;
+  |} in
+  Db.query_and_map ~query:query ~params:[|(string_of_int thing_id)|] ~mapper:tag_mapper
+
+
+let get_tags_available_for_set set_id =
+  match get_set set_id with
+  | Ok set -> (
+      let used_ids = set.yes_tag_ids @ set.no_tag_ids in
+      let query =
+        match used_ids with
+        | [] -> Printf.sprintf "SELECT * FROM tags;"
+        | _ ->
+          let ids_str = String.concat ", " (List.map string_of_int used_ids) in
+          Printf.sprintf "SELECT * FROM tags WHERE id NOT IN (%s);" ids_str
+      in
+
+      Db.query_and_map ~query:query ~params:[||] ~mapper:tag_mapper
+    )
+  | Error err -> Error err

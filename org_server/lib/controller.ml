@@ -8,11 +8,14 @@
 
 (* /things/:id *)
 let things_id_regex = Re.Pcre.regexp "^/things/([^/]+)$"
+let thing_available_tags_regex = Re.Pcre.regexp "^/things/([0-9a-zA-Z_-]+)/available-tags$"
+
 let tag_id_regex = Re.Pcre.regexp "^/tags/([^/]+)$"
 (* /things/:id/tags/:id *)
 let untag_thing_regex = Re.Pcre.regexp "^/things/([^/]+)/tags/([^/]+)$"
 (* /sets/:id *)
 let specific_set_path_regex = Re.Pcre.regexp "^/sets/([^/]+)$"
+let set_available_tags_regex = Re.Pcre.regexp "^/sets/([0-9a-zA-Z_-]+)/available-tags$"
 
 
 open Lwt.Infix
@@ -142,8 +145,12 @@ let generate_put_endpoint
   : put_endpoint
   = fun (uri: Uri.t) (body: Cohttp_lwt.Body.t) ->
     Cohttp_lwt.Body.to_string body >>= fun body_str ->
+
+    Lwt_io.printf "Body passed: %s\n" body_str >>= fun () ->
+
     match Yojson.Safe.from_string body_str |> of_json with
     | Ok parsed_body -> 
+
       controller uri parsed_body >>= (function
           | Ok rv ->
             let json_str = gen_api_resp_str true "gucci" (Some rv) to_json in
@@ -301,13 +308,13 @@ let get_sets_endpoint
 let get_set_endpoint
   : get_endpoint
   = generate_get_endpoint
-    Models.set_to_yojson
+    Models.set_rest_to_yojson
     (fun uri ->
        let path = Uri.path uri in
        let matches = Re.exec specific_set_path_regex path in
        let set_id_str = Re.Group.get matches 1 in
        let set_id = int_of_string set_id_str in
-       let set_result = Repository.get_set set_id in
+       let set_result = Repository.get_set_rest set_id in
        Lwt.return set_result)
 
 
@@ -336,9 +343,19 @@ let update_set_endpoint
        let name = set_body.Models.name in
        let text = set_body.Models.text in
        let yes_ids_to_add = set_body.Models.yes_ids_to_add in
+
+
+       let to_print =
+         match yes_ids_to_add with
+         | Some dese -> String.concat ", " (List.map string_of_int dese)
+         | None -> "No yes_ids_to_add!"
+       in
+       Lwt_io.printf "yes ids: %s\n" to_print >>= fun () ->
+
        let yes_ids_to_remove = set_body.Models.yes_ids_to_remove in
        let no_ids_to_add = set_body.Models.no_ids_to_add in
        let no_ids_to_remove = set_body.Models.no_ids_to_remove in
+
        let rv = Repository.update_set
            set_id
            ?name:(name)
@@ -350,3 +367,48 @@ let update_set_endpoint
            ()
        in
        Lwt.return rv)
+
+
+let update_thing_endpoint
+  : put_endpoint
+  = generate_put_endpoint
+    Models.update_thing_body_of_yojson
+    Models.thing_to_yojson
+    (fun uri body ->
+       let path = Uri.path uri in
+       let matches = Re.exec things_id_regex path in
+       let thing_id_str = Re.Group.get matches 1 in
+       let thing_id = int_of_string thing_id_str in
+
+       let name = body.Models.name in
+       let text = body.Models.text in
+       Repository.update_thing
+         thing_id
+         ?name:(name)
+         ?text:(text)
+         ()
+    )
+
+
+let get_things_available_tags_endpoint
+  : get_endpoint
+  = generate_get_endpoint
+    (list_to_something Models.tag_to_yojson)
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec thing_available_tags_regex path in
+       let thing_id_str = Re.Group.get matches 1 in
+       let thing_id = int_of_string thing_id_str in
+       Lwt.return (Repository.get_tags_available_for_thing thing_id))
+
+
+let get_set_available_tags_endpoint
+  : get_endpoint
+  = generate_get_endpoint
+    (list_to_something Models.tag_to_yojson)
+    (fun uri ->
+       let path = Uri.path uri in
+       let matches = Re.exec set_available_tags_regex path in
+       let set_id_str = Re.Group.get matches 1 in
+       let set_id = int_of_string set_id_str in
+       Lwt.return (Repository.get_tags_available_for_set set_id))

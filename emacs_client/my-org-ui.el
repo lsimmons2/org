@@ -28,18 +28,9 @@
   (evil-define-key 'normal 'global (kbd "SPC h a") 'view-tag-list)
   (evil-define-key 'normal 'global (kbd "SPC h s") 'view-set-list)
 
-  (evil-define-key 'normal 'global (kbd "SPC n s") 'create-set-ui)
-  (evil-define-key 'normal 'global (kbd "SPC n i") 'create-thing-ui)
-  (evil-define-key 'normal 'global (kbd "SPC n a") 'create-tag-ui)
-  ;; (global-set-key (kbd "SPC h i") 'view-thing-list) ;; List things
-  ;; (global-set-key (kbd "SPC h a") 'view-tag-list) ;; View a specific thing
-  ;; (global-set-key (kbd "SPC e n")
-  ;;                 (lambda ()
-  ;;                   (interactive)
-  ;;                   (open-editable-buffer
-  ;;                    "Default content"
-  ;;                    (lambda (content)
-  ;;                      (message "Edited content: %s" content)))))
+  (evil-define-key 'normal 'global (kbd "SPC n s") 'create-new-set)
+  (evil-define-key 'normal 'global (kbd "SPC n i") 'create-new-thing)
+  (evil-define-key 'normal 'global (kbd "SPC n a") 'create-new-tag)
   )
 
 (defun my-ui-start ()
