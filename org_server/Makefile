@@ -1,6 +1,9 @@
 dev:
 	ORG_ENV=dev dune exec -w bin/api.exe
 
+dev-debug:
+	ORG_ENV=dev LOG_LEVEL=debug dune exec -w bin/api.exe
+
 run-test-api:
 	ORG_ENV=test dune exec -w bin/api.exe
 

@@ -24,7 +24,8 @@ let log_request req =
     | _ -> "*OTHER*"
   in
 
-  Lwt_io.printf "\n%s %s\n" method_str path
+  Logger.info_lwt "%s %s" method_str path
+(* Lwt_io.printf "\n%s %s\n" method_str path *)
 
 
 let router _conn req body =
@@ -91,5 +92,5 @@ let server =
 
 let () =
   let current_env = Env.current_environment () in
-  Printf.printf "\nHola - arrancando server on port 7777 in %s env...\n%!" (Env.string_of_env current_env);
+  Logger.info "Starting server on port %d in %s env..." 7777 (Env.string_of_env current_env);
   Lwt_main.run server

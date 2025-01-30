@@ -46,6 +46,8 @@ let tag_to_thing_mapper (result : Postgresql.result) (row : int) : Models.tag_to
 
 
 let get_thing thing_id : (Models.thing, string) result =
+
+  Logger.debug "in get_thing for id %d" thing_id;
   let thing_query = "SELECT id, name, text FROM things WHERE id = $1" in
   let tag_query = "SELECT tags.id, tags.name, tags.text FROM tags
                    JOIN tags_to_things ON tags.id = tags_to_things.tag_id
@@ -75,6 +77,7 @@ let delete_thing thing_id : (unit, string) result =
 
 
 let get_things () : (Models.thing list, string) result = 
+  Logger.debug "in get_things";
   Db.query_and_map ~query:"SELECT * FROM things" ~params:[||] ~mapper:thing_mapper
 
 
