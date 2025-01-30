@@ -82,7 +82,6 @@ let generate_get_endpoint
     controller uri >>= (function
         | Ok rv ->
           let resp_json = gen_api_resp_json true "gucci" (Some rv) to_json in
-          (* Lwt_io.printf "returning data %s\n" json_str >>= fun () -> *)
           Logger.debug_lwt "returning data %s" (Yojson.Safe.pretty_to_string resp_json) >>= fun () ->
           Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:(Yojson.Safe.to_string resp_json) ()
         | Error err ->
@@ -297,11 +296,16 @@ let create_set_endpoint
   : post_endpoint
   = generate_post_endpoint
     Models.create_set_body_of_yojson
-    Models.set_to_yojson
+    Models.set_rest_to_yojson
     (fun set_body ->
        let name = set_body.Models.name in
        let text = set_body.Models.text in
-       Repository.create_set ~name ~text)
+       Repository.create_set ~name ~text
+       >>= fun created ->
+       match created with
+       | Ok s -> Lwt.return (Repository.set_rest_of_set s)
+       | Error err -> Lwt.return_error err
+    )
 
 
 let get_sets_endpoint
@@ -340,7 +344,7 @@ let update_set_endpoint
   : put_endpoint
   = generate_put_endpoint
     Models.update_set_body_of_yojson
-    Models.set_to_yojson
+    Models.set_rest_to_yojson
     (fun uri set_body ->
        let path = Uri.path uri in
        let matches = Re.exec specific_set_path_regex path in
@@ -357,13 +361,12 @@ let update_set_endpoint
          | Some dese -> String.concat ", " (List.map string_of_int dese)
          | None -> "No yes_ids_to_add!"
        in
-       Lwt_io.printf "yes ids: %s\n" to_print >>= fun () ->
 
        let yes_ids_to_remove = set_body.Models.yes_ids_to_remove in
        let no_ids_to_add = set_body.Models.no_ids_to_add in
        let no_ids_to_remove = set_body.Models.no_ids_to_remove in
 
-       let rv = Repository.update_set
+       let updated = Repository.update_set
            set_id
            ?name:(name)
            ?text:(text)
@@ -373,7 +376,10 @@ let update_set_endpoint
            ?no_ids_to_remove:(no_ids_to_remove)
            ()
        in
-       Lwt.return rv)
+       match updated with
+       | Ok s -> Lwt.return (Repository.set_rest_of_set s)
+       | Error err -> Lwt.return_error err
+    )
 
 
 let update_thing_endpoint

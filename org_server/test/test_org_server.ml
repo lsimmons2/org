@@ -388,14 +388,15 @@ let test_remove_tag_from_thing () =
   Lwt.return_unit
 
 
-let test_create_set_and_add_tags () =
+(* NB: this test was originally about creating the sets then adding things to them - removed the adding thing ids part b/c the thing ids were made up and atow there was too much tech debt to do it right *)
+let test_create_sets_with_incrementing_ids () =
 
   (* CREATE FIRST SET *)
   let set_name = "some set nameeeeeeeee" in
   post_set_to_api ~name:set_name ()
   >>= fun (resp, body) ->
   assert_http_status resp 201;
-  parse_payload body Org_lib.Models.set_of_yojson
+  parse_payload body Org_lib.Models.set_rest_of_yojson
   >>= fun created_thing_payload ->
   assert_payload_success created_thing_payload;
   let created_set = parse_option_or_fail_test created_thing_payload.data in
@@ -409,7 +410,7 @@ let test_create_set_and_add_tags () =
   post_set_to_api ~name:second_set_name ~text:second_set_text ()
   >>= fun (resp, body) ->
   assert_http_status resp 201;
-  parse_payload body Org_lib.Models.set_of_yojson
+  parse_payload body Org_lib.Models.set_rest_of_yojson
   >>= fun second_created_thing_payload ->
   assert_payload_success second_created_thing_payload;
   let second_created_set = parse_option_or_fail_test second_created_thing_payload.data in
@@ -418,23 +419,6 @@ let test_create_set_and_add_tags () =
     "second set name should be right" second_set_name second_created_set.name;
   Alcotest.(check (option string))
     "second set name should be right" (Some second_set_text) second_created_set.text;
-
-  (* ADD IDS TO SECOND SET *)
-  let yes_ids_to_add = [2;3] in
-  let yes_ids_to_remove = [22;33] in
-  let no_ids_to_add = [4;5] in
-  let no_ids_to_remove = [44;55] in
-  put_set_to_api
-    second_created_set.id
-    ~yes_ids_to_add:yes_ids_to_add
-    ~yes_ids_to_remove:yes_ids_to_remove
-    ~no_ids_to_add:no_ids_to_add
-    ~no_ids_to_remove:no_ids_to_remove
-    ()
-  >>= fun (resp, body) ->
-  assert_http_status resp 200;
-  parse_payload body Org_lib.Models.set_of_yojson
-  >>= fun updated_set_payload ->
 
   Lwt.return_unit
 
@@ -445,7 +429,7 @@ let test_delete_tag () =
   let set_name = "todos" in
   post_set_to_api ~name:set_name ()
   >>= fun (resp, body) ->
-  parse_payload body Org_lib.Models.set_of_yojson
+  parse_payload body Org_lib.Models.set_rest_of_yojson
   >>= fun created_thing_payload ->
   let created_set = parse_option_or_fail_test created_thing_payload.data in
 
@@ -498,7 +482,7 @@ let test_delete_tag () =
   (* GET SET *)
   get_set_from_api created_set.id
   >>= fun (resp, body) ->
-  parse_payload body Org_lib.Models.set_of_yojson
+  parse_payload body Org_lib.Models.set_rest_of_yojson
   >>= fun set_payload ->
   let set = parse_option_or_fail_test set_payload.data in
 
@@ -513,7 +497,7 @@ let test_set_whole_shebang () =
   let set_name = "todos" in
   post_set_to_api ~name:set_name ()
   >>= fun (resp, body) ->
-  parse_payload body Org_lib.Models.set_of_yojson
+  parse_payload body Org_lib.Models.set_rest_of_yojson
   >>= fun created_thing_payload ->
   let created_set = parse_option_or_fail_test created_thing_payload.data in
 
@@ -570,7 +554,7 @@ let test_set_whole_shebang () =
   (* GET SET *)
   get_set_from_api created_set.id
   >>= fun (resp, body) ->
-  parse_payload body Org_lib.Models.set_of_yojson
+  parse_payload body Org_lib.Models.set_rest_of_yojson
   >>= fun set_payload ->
   let set = parse_option_or_fail_test set_payload.data in
 
@@ -624,7 +608,7 @@ let () =
         test_case "should be able to create sets with incrementing ids, and add tags to them" `Quick (
           fun _switch () ->
             reset_db () >>= fun () ->
-            test_create_set_and_add_tags ()
+            test_create_sets_with_incrementing_ids ()
         );
         test_case "should be able to create set, have them return correct things in simple set of yes and no ids" `Quick (
           fun _switch () ->

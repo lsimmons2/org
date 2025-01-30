@@ -210,6 +210,39 @@ let get_things_for_yes_and_no_tag_ids yes_tag_ids no_tag_ids =
   Db.query_and_map ~query ~params ~mapper:thing_mapper
 
 
+let set_rest_of_set (set: Models.set) =
+  let things_res = get_things_for_yes_and_no_tag_ids set.yes_tag_ids set.no_tag_ids in
+
+  let yes_tags_res =
+    List.fold_left (fun acc x ->
+        match acc, x with
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        | Ok acc_list, Ok v -> Ok (v :: acc_list)
+      ) (Ok []) (List.map get_tag set.yes_tag_ids)
+  in
+  let no_tags_res =
+    List.fold_left (fun acc x ->
+        match acc, x with
+        | Error e, _ -> Error e
+        | _, Error e -> Error e
+        | Ok acc_list, Ok v -> Ok (v :: acc_list)
+      ) (Ok []) (List.map get_tag set.no_tag_ids)
+  in
+
+  match things_res, yes_tags_res, no_tags_res with
+  | Ok things, Ok yes_tags, Ok no_tags ->
+    (Ok {
+        Models.id = set.id;
+        name = set.name;
+        text = set.text;
+        things = things;
+        yes_tags = yes_tags;
+        no_tags = no_tags;
+      })
+  | Error e, _, _ -> Error e
+  | _, Error e, _ -> Error e
+  | _, _, Error e -> Error e
 
 
 let get_set set_id: (Models.set, string) result =
@@ -236,40 +269,7 @@ let get_set_rest set_id: (Models.set_rest, string) result =
     match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
     (* TODO: why doesn't returning error from set_of_* yojson function work? *)
     (* TODO: should this function return a result or an option? *)
-    | Ok d -> (
-        let things_res = get_things_for_yes_and_no_tag_ids d.yes_tag_ids d.no_tag_ids in
-
-        let yes_tags_res =
-          List.fold_left (fun acc x ->
-              match acc, x with
-              | Error e, _ -> Error e
-              | _, Error e -> Error e
-              | Ok acc_list, Ok v -> Ok (v :: acc_list)
-            ) (Ok []) (List.map get_tag d.yes_tag_ids)
-        in
-        let no_tags_res =
-          List.fold_left (fun acc x ->
-              match acc, x with
-              | Error e, _ -> Error e
-              | _, Error e -> Error e
-              | Ok acc_list, Ok v -> Ok (v :: acc_list)
-            ) (Ok []) (List.map get_tag d.no_tag_ids)
-        in
-
-        match things_res, yes_tags_res, no_tags_res with
-        | Ok things, Ok yes_tags, Ok no_tags ->
-          (Ok {
-              id = d.id;
-              name = d.name;
-              text = d.text;
-              things = things;
-              yes_tags = yes_tags;
-              no_tags = no_tags;
-            })
-        | Error e, _, _ -> Error e
-        | _, Error e, _ -> Error e
-        | _, _, Error e -> Error e
-      )
+    | Ok d -> set_rest_of_set d
     | Error err -> Error err
   else
     Error (Printf.sprintf "no set with id %d found" set_id)
