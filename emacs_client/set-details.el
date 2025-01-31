@@ -1,11 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
 
-(require 'domain)
-(require 'utils)
-(require 'tag-tiles)
-
-
 (defconst name-label "Name:")
 (defconst text-label "Description:")
 (defconst yes-tags-label "Yes Tags:")
@@ -158,7 +153,7 @@
 	(insert "\n<No things in this set>")
       (dolist (thing things)
 	(insert-text-button
-	 (format "\n- %s" (alist-get 'name thing))
+	 (format "\n[%s]" (alist-get 'name thing))
          'action (lambda (_) (view-thing-details (alist-get 'id thing)))
          'follow-link t
 	 'face '(:inherit default)

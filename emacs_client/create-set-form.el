@@ -1,9 +1,6 @@
 ;;; -*- lexical-binding: t -*-
 
 
-(require 'domain)
-
-
 (defconst name-label "Name:")
 (defconst text-label "Description:")
 

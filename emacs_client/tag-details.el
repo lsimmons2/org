@@ -1,8 +1,5 @@
 ;;; tag-details.el --- Tag Details View -*- lexical-binding: t -*-
 
-(require 'domain)
-(require 'utils)
-
 (define-derived-mode tag-details-mode special-mode "Tag-Details"
   "Major mode for viewing details of a single tag.")
 

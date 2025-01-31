@@ -1,10 +1,6 @@
 ;;; thing-details.el --- Thing Details View -*- lexical-binding: t -*-
 
 
-(require 'domain)
-(require 'utils)
-(require 'tag-tiles)
-
 
 (defun add-tag-to-thing ()
   (interactive)

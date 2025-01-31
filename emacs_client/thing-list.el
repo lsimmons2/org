@@ -1,9 +1,5 @@
 ;;; thing-list.el --- Thing List View -*- lexical-binding: t -*-
 
-(require 'domain)
-(require 'base-modes)
-
-
 
 (defun render-thing-list (things)
   "Render a list of THINGS in the current buffer using a tabulated list."

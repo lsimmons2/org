@@ -1,8 +1,5 @@
 ;; -*- lexical-binding: t; -*-
 
-(require 'domain)
-(require 'base-modes)
-
 
 (defun render-set-list (sets)
   "Render a list of SETS in the current buffer using a tabulated list."

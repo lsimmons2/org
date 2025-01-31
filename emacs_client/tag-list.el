@@ -1,7 +1,5 @@
 ;;; tag-list.el --- Tag List View -*- lexical-binding: t -*-
 
-(require 'domain)
-
 (defun tag-list-visit-entry ()
   (interactive)
   (let ((id (tabulated-list-get-id)))
