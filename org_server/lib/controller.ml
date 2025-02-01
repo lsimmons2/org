@@ -300,9 +300,7 @@ let create_set_endpoint
     (fun set_body ->
        let name = set_body.Models.name in
        let text = set_body.Models.text in
-       Repository.create_set ~name ~text
-       >>= fun created ->
-       match created with
+       match Repository.create_set ~name ~text with
        | Ok s -> Lwt.return (Repository.set_rest_of_set s)
        | Error err -> Lwt.return_error err
     )
@@ -337,7 +335,8 @@ let delete_set_endpoint
        let matches = Re.exec specific_set_path_regex path in
        let set_id_str = Re.Group.get matches 1 in
        let set_id = int_of_string set_id_str in
-       Lwt.return (Repository.delete_set set_id))
+       Repository.delete_set set_id;
+       Lwt.return_ok ())
 
 
 let update_set_endpoint

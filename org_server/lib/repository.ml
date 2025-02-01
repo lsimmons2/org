@@ -128,9 +128,7 @@ let untag_thing ~tag_id ~thing_id =
     "DELETE FROM tags_to_things WHERE thing_id=$1 AND tag_id=$2"
   in
   let params = [|(string_of_int thing_id); (string_of_int tag_id)|] in
-  match Db.query_db query ~params:params () with
-  | Ok _ -> Ok ()
-  | Error err -> Error err
+  Result.bind (Db.query_db query ~params:params ()) (fun _ -> Ok ())
 
 
 
@@ -159,32 +157,18 @@ let find_highest_set_id () =
 
 
 let create_set ~name ~text =
-  Lwt.catch
-    (fun () ->
-       (* Try block *)
-       let new_set_id = (find_highest_set_id ()) + 1 in
-       let file_path = get_set_file_path new_set_id in
-       let new_set: Models.set = {
-         id=new_set_id;
-         name=name;
-         text=text;
-         yes_tag_ids=[];
-         no_tag_ids=[];
-         things=[];
-       } in
-       Yojson.Safe.to_file file_path (Models.set_to_yojson new_set);
-       Lwt.return_ok new_set
-    )
-    (fun exn ->
-       (* Catch block *)
-       match exn with
-       | Yojson.Json_error msg ->
-         Lwt.return_error (Printf.sprintf "Failed to write JSON to file: %s" msg)
-       | Sys_error msg ->
-         Lwt.return_error (Printf.sprintf "Sys_error: %s" msg)
-       | _ ->
-         Lwt.return_error (Printf.sprintf "Unexpected exception: %s" (Printexc.to_string exn))
-    )
+  let new_set_id = (find_highest_set_id ()) + 1 in
+  let file_path = get_set_file_path new_set_id in
+  let new_set: Models.set = {
+    id=new_set_id;
+    name=name;
+    text=text;
+    yes_tag_ids=[];
+    no_tag_ids=[];
+    things=[];
+  } in
+  Yojson.Safe.to_file file_path (Models.set_to_yojson new_set);
+  Ok new_set
 
 
 let get_things_for_yes_and_no_tag_ids yes_tag_ids no_tag_ids =
@@ -249,17 +233,13 @@ let get_set set_id: (Models.set, string) result =
   let file_path = get_set_file_path set_id in
   if Sys.file_exists file_path then
     match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
-    (* TODO: why doesn't returning error from set_of_* yojson function work? *)
-    (* TODO: should this function return a result or an option? *)
     | Ok d -> (
-        let things = get_things_for_yes_and_no_tag_ids d.yes_tag_ids d.no_tag_ids in
-        match things with
-        | Ok ts -> Ok { d with things = ts }
-        | Error err -> Error err
+        Result.bind (get_things_for_yes_and_no_tag_ids d.yes_tag_ids d.no_tag_ids)
+          (fun ts -> Ok { d with things = ts })
       )
-    | Error err -> Error err
+    | Error err -> failwith (Printf.sprintf "Couldn't parse set json: " ^ err)
   else
-    Error (Printf.sprintf "no set with id %d found" set_id)
+    Error (Printf.sprintf "Set file doesn't exist: " ^ file_path)
 
 
 
@@ -290,7 +270,7 @@ let get_all_sets () =
         match acc, (get_set set_id) with
         | Ok gucci_acc, Ok gucci_new -> Ok (gucci_new :: gucci_acc)
         | Error e, _ -> Error e
-        | _, Error e -> Error e
+        | _, Error e -> Error (Printf.sprintf "Set %d not found: %s" set_id e)
       ) (Ok []) file_names
   with
   | Sys_error msg -> Error (Printf.sprintf "Error reading directory: %s\n" msg)
@@ -298,10 +278,7 @@ let get_all_sets () =
 
 let delete_set set_id =
   let file_path = get_set_file_path set_id in
-  try
-    Ok (Sys.remove file_path);
-  with
-  | Sys_error msg -> Error ("Failed to delete set: " ^ msg)
+  Sys.remove file_path
 
 
 (* SNIPPET - all this stuff *)
@@ -359,22 +336,20 @@ let update_set
     ()
   =
   let file_path = get_set_file_path set_id in
-  match (Yojson.Safe.from_file file_path |> Models.set_of_yojson) with
-  | Ok set ->
+  Result.bind (Yojson.Safe.from_file file_path |> Models.set_of_yojson)
+    (fun set ->
+       let updated_set =
+         set
+         |> (fun s -> match name with Some n -> update_set_name n s | None -> s)
+         |> (fun s -> match text with Some t -> update_set_text t s | None -> s)
+         |> (fun s -> match yes_ids_to_add with Some ids -> add_yes_tags_to_set ids s | None -> s)
+         |> (fun s -> match yes_ids_to_remove with Some ids -> remove_yes_tags_from_set ids s | None -> s)
+         |> (fun s -> match no_ids_to_add with Some ids -> add_no_tags_to_set ids s | None -> s)
+         |> (fun s -> match no_ids_to_remove with Some ids -> remove_no_tags_from_set ids s | None -> s)
+       in
 
-    let updated_set =
-      set
-      |> (fun s -> match name with Some n -> update_set_name n s | None -> s)
-      |> (fun s -> match text with Some t -> update_set_text t s | None -> s)
-      |> (fun s -> match yes_ids_to_add with Some ids -> add_yes_tags_to_set ids s | None -> s)
-      |> (fun s -> match yes_ids_to_remove with Some ids -> remove_yes_tags_from_set ids s | None -> s)
-      |> (fun s -> match no_ids_to_add with Some ids -> add_no_tags_to_set ids s | None -> s)
-      |> (fun s -> match no_ids_to_remove with Some ids -> remove_no_tags_from_set ids s | None -> s)
-    in
-
-    Yojson.Safe.to_file file_path (Models.set_to_yojson updated_set);
-    Ok updated_set
-  | Error err -> Error err
+       Yojson.Safe.to_file file_path (Models.set_to_yojson updated_set);
+       Ok updated_set)
 
 
 let update_thing thing_id ?name ?text () =
@@ -402,38 +377,35 @@ let update_thing thing_id ?name ?text () =
 
 
 let remove_tag_from_sets tag_id : (unit, string) result =
-  (* Ok () *)
-  match (get_all_sets ()) with
-  | Ok sets -> (
-      let results = List.map (
-          fun (s: Models.set) ->
-            update_set
-              s.Models.id
-              ~yes_ids_to_remove:[tag_id]
-              ~no_ids_to_remove:[tag_id]
-              ()
-        ) sets in
-      let errors = List.filter_map (function
-          | Error e -> Some e
-          | Ok _ -> None
-        ) results in
-      match errors with
-      | [] -> Ok ()
-      | errs -> Error (String.concat ", " errs)
-    )
-  | Error err -> Error err
+  Result.bind (get_all_sets ())
+    (fun sets -> (
+         let results = List.map (
+             fun (s: Models.set) ->
+               update_set
+                 s.Models.id
+                 ~yes_ids_to_remove:[tag_id]
+                 ~no_ids_to_remove:[tag_id]
+                 ()
+           ) sets in
+         let errors = List.filter_map (function
+             | Error e -> Some e
+             | Ok _ -> None
+           ) results in
+         match errors with
+         | [] -> Ok ()
+         | errs -> Error (String.concat ", " errs)
+       ))
 
 
 let delete_tag tag_id =
-  match remove_tag_from_sets tag_id with
-  | Ok _ -> (
-      let query = "DELETE FROM tags WHERE id = $1" in
-      let params = [|(string_of_int tag_id)|] in
-      match Db.query_db query ~params:params () with
-      | Ok _ -> Ok ()
-      | Error err -> Error err
-    )
-  | Error err -> Error err
+  Result.bind (remove_tag_from_sets tag_id)
+    (fun _ -> (
+         let query = "DELETE FROM tags WHERE id = $1" in
+         let params = [|(string_of_int tag_id)|] in
+         match Db.query_db query ~params:params () with
+         | Ok _ -> Ok ()
+         | Error err -> Error err
+       ))
 
 
 let get_tags_available_for_thing thing_id =
@@ -448,17 +420,16 @@ let get_tags_available_for_thing thing_id =
 
 
 let get_tags_available_for_set set_id =
-  match get_set set_id with
-  | Ok set -> (
-      let used_ids = set.yes_tag_ids @ set.no_tag_ids in
-      let query =
-        match used_ids with
-        | [] -> Printf.sprintf "SELECT * FROM tags;"
-        | _ ->
-          let ids_str = String.concat ", " (List.map string_of_int used_ids) in
-          Printf.sprintf "SELECT * FROM tags WHERE id NOT IN (%s);" ids_str
-      in
+  Result.bind (get_set set_id)
+    (fun set -> (
+         let used_ids = set.yes_tag_ids @ set.no_tag_ids in
+         let query =
+           match used_ids with
+           | [] -> Printf.sprintf "SELECT * FROM tags;"
+           | _ ->
+             let ids_str = String.concat ", " (List.map string_of_int used_ids) in
+             Printf.sprintf "SELECT * FROM tags WHERE id NOT IN (%s);" ids_str
+         in
 
-      Db.query_and_map ~query:query ~params:[||] ~mapper:tag_mapper
-    )
-  | Error err -> Error err
+         Db.query_and_map ~query:query ~params:[||] ~mapper:tag_mapper
+       ))
