@@ -1,6 +1,10 @@
 dev:
 	ORG_ENV=dev dune exec -w bin/api.exe
 
+# "index watch"
+iw:
+	dune build @ocaml-index --watch
+
 dev-debug:
 	ORG_ENV=dev LOG_LEVEL=debug dune exec -w bin/api.exe
 
