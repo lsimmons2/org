@@ -142,7 +142,6 @@ let get_set_file_path set_id =
 
 let extract_id fp =
   let base_name = Filename.remove_extension fp in
-  (* Lwt_io.printf "base_name be %s\n" base_name >>= fun () -> *)
   int_of_string base_name
 
 
@@ -353,7 +352,6 @@ let update_set
 
 
 let update_thing thing_id ?name ?text () =
-  Lwt_io.printf "in update_thing! \n" >>= fun () ->
 
   let query =
     match (name, text) with
@@ -369,8 +367,6 @@ let update_thing thing_id ?name ?text () =
     | (None, Some t) -> [| t; string_of_int thing_id |]
     | (None, None) -> [| |]  (* This case won't occur due to failwith above *)
   in
-
-  Lwt_io.printf "after deifning params!! \n" >>= fun () ->
 
   let rv = Db.query_and_map_single ~query:query ~params:params ~mapper:thing_mapper in
   Lwt.return rv

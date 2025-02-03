@@ -85,7 +85,7 @@ let generate_get_endpoint
           Logger.debug_lwt "returning data %s" (Yojson.Safe.pretty_to_string resp_json) >>= fun () ->
           Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:(Yojson.Safe.to_string resp_json) ()
         | Error err ->
-          Lwt_io.printf "Error in endpoint %s\n" err >>= fun () ->
+          Logger.error_lwt "Error in endpoint %s\n" err >>= fun () ->
           let resp_json = gen_api_resp_json false "my bad" None to_json in
           let json_str = Yojson.Safe.to_string resp_json in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
@@ -98,10 +98,10 @@ let generate_delete_endpoint
     controller uri >>= (function
         | Ok rv ->
           let json_str = gen_api_resp_str_no_data true "gucci deleted" in
-          Lwt_io.printf "returning data %s\n" json_str >>= fun () ->
+          Logger.debug_lwt "returning data %s\n" json_str >>= fun () ->
           Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:json_str ()
         | Error err ->
-          Lwt_io.printf "Error in endpoint %s\n" err >>= fun () ->
+          Logger.error_lwt "Error in endpoint %s\n" err >>= fun () ->
           let json_str = gen_api_resp_str_no_data false "my bad" in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
 
@@ -127,15 +127,15 @@ let generate_post_endpoint
       controller parsed_body >>= (function
           | Ok rv ->
             let resp_json = gen_api_resp_json true "gucci" (Some rv) to_json in
-            Lwt_io.printf "Returning data from endpoint: %s\n" (Yojson.Safe.pretty_to_string resp_json) >>= fun () ->
+            Logger.debug_lwt "Returning data from endpoint: %s\n" (Yojson.Safe.pretty_to_string resp_json) >>= fun () ->
             Cohttp_lwt_unix.Server.respond_string ~status:`Created ~body:(Yojson.Safe.to_string resp_json) ()
           | Error err ->
-            Lwt_io.printf "Error in controller function: %s\n" err >>= fun () ->
+            Logger.error_lwt "Error in controller function: %s\n" err >>= fun () ->
             let resp_json = gen_api_resp_json false "my bad" None to_json in
             Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:(Yojson.Safe.to_string resp_json) ())
     | Error json_body_parse_err ->
       let resp_json = gen_api_resp_json false "nah babi - bad request" None to_json in
-      Lwt_io.printf "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
+      Logger.error_lwt "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
       Cohttp_lwt_unix.Server.respond_string ~status:`Bad_request ~body:(Yojson.Safe.to_string resp_json) ()
 
 
@@ -148,7 +148,7 @@ let generate_put_endpoint
   = fun (uri: Uri.t) (body: Cohttp_lwt.Body.t) ->
     Cohttp_lwt.Body.to_string body >>= fun body_str ->
 
-    Lwt_io.printf "Body passed: %s\n" body_str >>= fun () ->
+    Logger.debug_lwt "Body passed: %s\n" body_str >>= fun () ->
 
     match Yojson.Safe.from_string body_str |> of_json with
     | Ok parsed_body -> 
@@ -156,16 +156,16 @@ let generate_put_endpoint
       controller uri parsed_body >>= (function
           | Ok rv ->
             let resp_json = gen_api_resp_json true "gucci" (Some rv) to_json in
-            Lwt_io.printf "Returning data from endpoint: %s\n" (Yojson.Safe.pretty_to_string resp_json) >>= fun () ->
+            Logger.debug_lwt "Returning data from endpoint: %s\n" (Yojson.Safe.pretty_to_string resp_json) >>= fun () ->
             Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:(Yojson.Safe.to_string resp_json) ()
           | Error err ->
-            Lwt_io.printf "Error in controller function: %s\n" err >>= fun () ->
+            Logger.error_lwt "Error in controller function: %s\n" err >>= fun () ->
             let resp_json = gen_api_resp_json false "my bad" None to_json in
             Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:(Yojson.Safe.to_string resp_json) ())
     | Error json_body_parse_err ->
       let resp_json = gen_api_resp_json false "nah babi - bad request" None to_json in
-      Lwt_io.printf "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
-      Lwt_io.printf "err: %s\n" json_body_parse_err >>= fun () ->
+      Logger.error_lwt "Bad request! this body doesn't look right: %s\n" body_str >>= fun () ->
+      Logger.error_lwt "err: %s\n" json_body_parse_err >>= fun () ->
       Cohttp_lwt_unix.Server.respond_string ~status:`Bad_request ~body:(Yojson.Safe.to_string resp_json) ()
 
 

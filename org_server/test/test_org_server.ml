@@ -194,7 +194,6 @@ let parse_payload
   : 'a Org_lib.Models.get_response Lwt.t =
   Cohttp_lwt.Body.to_string body
   >>= fun body_str ->
-  (* Lwt_io.printf "parsing http resp body: %s\n" body_str >>= fun () -> *)
   match
     Yojson.Safe.from_string body_str
     |> Org_lib.Models.get_response_of_yojson (fun json ->
@@ -581,7 +580,6 @@ let () =
       "Things", [
         test_case "Create and get things Test" `Quick (
           fun _switch () ->
-            Lwt_io.flush Lwt_io.stdout >>= fun () ->
             reset_db () >>= fun () ->
             test_create_and_get_thing_and_tag ()
         );
@@ -589,7 +587,6 @@ let () =
       "Tags", [
         test_case "Should be able to create a thing and a tag and tag the thing" `Quick (
           fun _switch () ->
-            Lwt_io.flush Lwt_io.stdout >>= fun () ->
             reset_db () >>= fun () ->
             test_tag_thing ()
         );

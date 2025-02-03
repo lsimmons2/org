@@ -25,7 +25,6 @@ let log_request req =
   in
 
   Logger.info_lwt "%s %s" method_str path
-(* Lwt_io.printf "\n%s %s\n" method_str path *)
 
 
 let router _conn req body =
@@ -76,14 +75,14 @@ let router _conn req body =
        | (`DELETE, path) when Re.execp Controller.specific_set_path_regex path -> Org_lib.Controller.delete_set_endpoint uri
 
        | _ -> (
-           Lwt_io.printf "404 not found!\n" >>= fun () ->
+           Logger.error_lwt "404 not found!\n" >>= fun () ->
            Server.respond_string ~status:`Not_found ~body:"Not Found" ()
          )
     )
     (fun exn ->
        (* Log the exception *)
        let error_message = Printexc.to_string exn in
-       Lwt_io.printf "Uncaught exception while processing request: %s\n%!" error_message >>= fun () ->
+       Logger.error_lwt "Uncaught exception while processing request: %s\n%!" error_message >>= fun () ->
        (* Respond with a 500 error *)
        Server.respond_string ~status:`Internal_server_error ~body:"Internal Server Error" ())
 
