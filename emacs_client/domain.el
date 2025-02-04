@@ -250,17 +250,25 @@ ARGS should be specified as keyword arguments:
 	      (message "Error fetching thing: %s" error-thrown)))))
 
 
-(defun fetch-all-goto-candidates (success-cb error-cb)
-  (request
-    (concat api-base-url "/goto-candidates")
-    :headers '(("Content-Type" . "application/json"))
-    :parser 'json-read
-    :success (cl-function
-	      (lambda (&key data &allow-other-keys)
-		(funcall success-cb (alist-get 'data data))))
-    :error (cl-function
-	    (lambda (&key error-thrown &allow-other-keys)
-	      (message "Error fetching thing: %s" error-thrown)))))
+(defun fetch-goto-candidates (success-cb error-cb &optional params)
+  "Fetch goto candidates, optionally filtering by query params.
+   PARAMS should be an alist like '((type thing) (type tag))"
+  (let* ((base-url (concat api-base-url "/goto-candidates"))
+         (query-string (if params
+                           (concat "?" (url-build-query-string params))
+                         ""))
+         (full-url (concat base-url query-string)))
+    (request
+      full-url
+      :headers '(("Content-Type" . "application/json"))
+      :parser 'json-read
+      :success (cl-function
+                (lambda (&key data &allow-other-keys)
+                  (funcall success-cb (alist-get 'data data))))
+      :error (cl-function
+              (lambda (&key error-thrown &allow-other-keys)
+                (funcall error-cb error-thrown))))))
+
 
 
 (defun delete-thing (id callback)

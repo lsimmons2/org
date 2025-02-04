@@ -74,9 +74,25 @@ let get_thing_from_api thing_id =
   let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/things/%d" thing_id) in
   Cohttp_lwt_unix.Client.get uri
 
-let get_goto_candidates_from_api () =
-  let uri = Uri.of_string "http://localhost:7777/goto-candidates" in
-  Cohttp_lwt_unix.Client.get uri
+let get_goto_candidates_from_api ?(types=[]) () =
+  let base_uri = Uri.of_string "http://localhost:7777/goto-candidates" in
+
+  let type_params =
+    match types with
+    | [] -> []  (* No filter, fetch all *)
+    | _ -> [
+        ("type", List.map (fun t ->
+             match t with
+             | Org_lib.Models.Thing -> "thing"
+             | Tag -> "tag"
+             | Set_ -> "set"
+           ) types)
+      ]
+  in
+
+  let uri_with_params = Uri.add_query_params base_uri type_params in
+  Cohttp_lwt_unix.Client.get uri_with_params
+
 
 let remove_tag_from_thing_in_api thing_id tag_id =
   let uri = Uri.of_string (
@@ -604,10 +620,39 @@ let test_create_and_get_goto_candidates () =
   parse_payload body (parse_json_list Org_lib.Models.goto_candidate_rest_of_yojson)
   >>= fun goto_candidates_payload ->
   let goto_candidates = parse_option_or_fail_test goto_candidates_payload.data in
-
   Alcotest.(check int) "there should be 3 goto opportunities" 3 (List.length goto_candidates);
   Alcotest.(check (list string)) "goto candidates have correct entity names" [set_name; thing_name; tag_name;] (List.map (fun (o:Org_lib.Models.goto_candidate_rest) -> o.entity_name) goto_candidates);
   Alcotest.(check (list (option string))) "goto candidates have correct entity texts" [Some set_text; Some thing_text; None] (List.map (fun (o:Org_lib.Models.goto_candidate_rest) -> o.entity_text) goto_candidates);
+
+  (* GET JUST SET GOTO OPPORTUNITIES *)
+  get_goto_candidates_from_api ~types:[Set_] ()
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body (parse_json_list Org_lib.Models.goto_candidate_rest_of_yojson)
+  >>= fun goto_candidates_payload ->
+  let goto_candidates = parse_option_or_fail_test goto_candidates_payload.data in
+  Alcotest.(check int) "there should be 1 goto set opportunity" 1 (List.length goto_candidates);
+  Alcotest.(check (list string)) "goto set candidate should have correct entity name" [set_name; ] (List.map (fun (o:Org_lib.Models.goto_candidate_rest) -> o.entity_name) goto_candidates);
+
+  (* GET JUST THING GOTO OPPORTUNITIES *)
+  get_goto_candidates_from_api ~types:[Thing] ()
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body (parse_json_list Org_lib.Models.goto_candidate_rest_of_yojson)
+  >>= fun goto_candidates_payload ->
+  let goto_candidates = parse_option_or_fail_test goto_candidates_payload.data in
+  Alcotest.(check int) "there should be 1 goto thing opportunity" 1 (List.length goto_candidates);
+  Alcotest.(check (list string)) "goto thing candidate should have correct entity name" [thing_name; ] (List.map (fun (o:Org_lib.Models.goto_candidate_rest) -> o.entity_name) goto_candidates);
+
+  (* GET JUST TAG GOTO OPPORTUNITIES *)
+  get_goto_candidates_from_api ~types:[Tag] ()
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body (parse_json_list Org_lib.Models.goto_candidate_rest_of_yojson)
+  >>= fun goto_candidates_payload ->
+  let goto_candidates = parse_option_or_fail_test goto_candidates_payload.data in
+  Alcotest.(check int) "there should be 1 goto tag opportunity" 1 (List.length goto_candidates);
+  Alcotest.(check (list string)) "goto tag candidate should have correct entity name" [tag_name; ] (List.map (fun (o:Org_lib.Models.goto_candidate_rest) -> o.entity_name) goto_candidates);
 
   Lwt.return_unit
 

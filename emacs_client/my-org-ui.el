@@ -33,6 +33,9 @@
   (evil-define-key 'normal 'global (kbd "SPC n a") 'create-new-tag)
 
   (evil-define-key 'normal 'global (kbd "SPC p o") 'search-sets-things-tags)
+  (evil-define-key 'normal 'global (kbd "SPC p s") 'search-sets)
+  (evil-define-key 'normal 'global (kbd "SPC p i") 'search-things)
+  (evil-define-key 'normal 'global (kbd "SPC p a") 'search-tags)
   )
 
 (provide 'my-org-ui)

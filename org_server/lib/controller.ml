@@ -434,24 +434,53 @@ let map_things_to_candidates (things: Models.thing list) : Models.goto_candidate
 let map_tags_to_candidates (tags: Models.tag list) : Models.goto_candidate_rest list =
   List.map (fun (t: Models.tag) -> { Models.entity_id = t.id; entity_name = t.name; entity_type = Tag; entity_text = t.text }) tags
 
+let parse_entity_type_filter uri =
+  let query = Uri.query uri in
+  match List.assoc_opt "type" query with
+  | Some ["thing"] -> [Models.Thing]
+  | Some ["tag"] -> [Tag]
+  | Some ["set"] -> [Set_]
+  | Some types -> 
+    List.filter_map (function
+        | "thing" -> Some Models.Thing
+        | "tag" -> Some Tag
+        | "set" -> Some Set_
+        | _ -> None
+      ) types
+  | None -> [Thing; Tag; Set_]  (* no type query param - get sets, things, and tags *)
+
 let get_goto_candidates_endpoint
   : get_endpoint
   = generate_get_endpoint
     (list_to_something Models.goto_candidate_rest_to_yojson)
     (fun uri ->
-       let candidates = Result.bind (Repository.get_all_sets())
-           (fun sets ->
-              Result.bind (Repository.get_things())
-                (fun things ->
-                   Result.bind (Repository.get_tags())
-                     (fun tags ->
-                        Ok (
-                          (map_sets_to_candidates sets) @
-                          (map_things_to_candidates things) @
-                          (map_tags_to_candidates tags)
-                        )
-                     )
-                )
-           ) in
-       Lwt.return candidates
+       let requested_types = parse_entity_type_filter uri in
+
+       (* Only fetch the required types *)
+       let sets_promise =
+         if List.mem Models.Set_ requested_types then
+           Lwt.return (Repository.get_all_sets ()) >|= Result.map map_sets_to_candidates
+         else Lwt.return (Ok [])
+       in
+
+       let things_promise =
+         if List.mem Models.Thing requested_types then
+           Lwt.return (Repository.get_things ()) >|= Result.map map_things_to_candidates
+         else Lwt.return (Ok [])
+       in
+
+       let tags_promise =
+         if List.mem Models.Tag requested_types then
+           Lwt.return (Repository.get_tags ()) >|= Result.map map_tags_to_candidates
+         else Lwt.return (Ok [])
+       in
+
+       (* Run all the necessary queries concurrently *)
+       Lwt.all [sets_promise; things_promise; tags_promise] >>= fun results ->
+       match results with
+       | [Ok sets; Ok things; Ok tags] ->
+         let combined = sets @ things @ tags in
+         Lwt.return (Ok combined)
+       | _ ->
+         Lwt.return (Error "One or more queries failed")
     )
