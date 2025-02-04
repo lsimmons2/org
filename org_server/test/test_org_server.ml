@@ -70,6 +70,10 @@ let get_tags_from_api () =
   let uri = Uri.of_string "http://localhost:7777/tags" in
   Cohttp_lwt_unix.Client.get uri
 
+let get_tag_from_api tag_id =
+  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/tags/%d" tag_id)  in
+  Cohttp_lwt_unix.Client.get uri
+
 let get_thing_from_api thing_id =
   let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/things/%d" thing_id) in
   Cohttp_lwt_unix.Client.get uri
@@ -340,6 +344,43 @@ let test_tag_thing () =
     created_tag.name tag_thing_tagged_with.name;
   Alcotest.(check (option string)) "tag should have right text"
     created_tag.text tag_thing_tagged_with.text;
+  Lwt.return_unit
+
+
+let test_tag_details_comes_with_tagged_things () =
+
+  (* *** CREATE THING *** *)
+  post_thing_to_api { name="thing name"; text = Some "thing text" }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload -> 
+  let created_thing = parse_option_or_fail_test created_thing_payload.data in
+  let created_thing_id = created_thing.id in
+
+  (* *** CREATE TAG *** *)
+  post_tag_to_api { name="tag name"; text = Some "tag text" }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun created_tag_payload ->
+  let created_tag: Org_lib.Models.tag = parse_option_or_fail_test created_tag_payload.data in
+  let created_tag_id = created_tag.id in
+
+  (* *** TAG THING *** *)
+  tag_thing_in_api ~tag_id:created_tag_id ~thing_id:created_thing_id
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_to_thing_of_yojson
+  >>= fun created_tag_to_thing_payload ->
+  let created_tag_to_thing = parse_option_or_fail_test created_tag_to_thing_payload.data in
+
+  get_tag_from_api created_tag_id
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body Org_lib.Models.tag_rest_of_yojson
+  >>= fun get_tag_payload ->
+  let tag_details = parse_option_or_fail_test get_tag_payload.data in
+  Alcotest.(check int) "there should be 1 thing returned with tag" 1 (List.length tag_details.things);
+  Alcotest.(check int) "should be the right thing" created_thing_id (List.hd tag_details.things).id;
+
   Lwt.return_unit
 
 
@@ -689,6 +730,11 @@ let () =
           fun _switch () ->
             reset_db () >>= fun () ->
             test_delete_tag ()
+        );
+        test_case "Tag details should come with things that are tagged with it" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_tag_details_comes_with_tagged_things ()
         );
       ];
       "Sets", [

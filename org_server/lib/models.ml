@@ -44,6 +44,13 @@ type set_rest = {
   things: thing list;
 } [@@deriving yojson]
 
+type tag_rest = {
+  id:int;
+  name: string;
+  text: string option;
+  things: thing list;
+} [@@deriving yojson]
+
 
 type entity_type_rest = Thing | Tag | Set_ [@@deriving yojson]
 

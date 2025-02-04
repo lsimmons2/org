@@ -216,13 +216,27 @@ let get_tags_endpoint
 let get_tag_endpoint
   : get_endpoint
   = generate_get_endpoint
-    Models.tag_to_yojson
+    Models.tag_rest_to_yojson
     (fun uri ->
        let path = Uri.path uri in
        let matches = Re.exec tag_id_regex path in
        let tag_id_str = Re.Group.get matches 1 in
        let tag_id = int_of_string tag_id_str in
-       Lwt.return (Repository.get_tag tag_id))
+       match (Repository.get_tag tag_id) with
+       | Ok tag -> (
+           match Repository.get_things_for_yes_and_no_tag_ids [tag.id] [] with
+           | Ok things ->
+             Lwt.return_ok {
+               Models.id=tag.id;
+               name=tag.name;
+               text=tag.text;
+               things=things
+             }
+           | Error err -> Lwt.return_error err
+         )
+       | Error err -> Lwt.return_error err
+    )
+
 
 
 let create_thing_endpoint
