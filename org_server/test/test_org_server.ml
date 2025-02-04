@@ -74,6 +74,10 @@ let get_thing_from_api thing_id =
   let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/things/%d" thing_id) in
   Cohttp_lwt_unix.Client.get uri
 
+let get_goto_candidates_from_api () =
+  let uri = Uri.of_string "http://localhost:7777/goto-candidates" in
+  Cohttp_lwt_unix.Client.get uri
+
 let remove_tag_from_thing_in_api thing_id tag_id =
   let uri = Uri.of_string (
       Printf.sprintf "http://localhost:7777/things/%d/tags/%d" thing_id tag_id) in
@@ -566,11 +570,52 @@ let test_set_whole_shebang () =
 
 
 
+let test_create_and_get_goto_candidates () =
+
+  (* CREATE SET, THING, TAG *)
+  let set_name = "some set" in
+  let set_text = "some set description" in
+  post_set_to_api ~name:set_name ~text:set_text ()
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.set_rest_of_yojson
+  >>= fun created_thing_payload ->
+  let created_set = parse_option_or_fail_test created_thing_payload.data in
+
+  let thing_name = "some thing" in
+  let thing_text = "some thing description" in
+  post_thing_to_api { name=thing_name; text = Some thing_text }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.thing_of_yojson
+  >>= fun created_thing_payload ->
+  let created_thing = parse_option_or_fail_test created_thing_payload.data in
+
+  let tag_name = "some tag" in
+  post_tag_to_api { name=tag_name; text=None }
+  >>= fun (resp, body) ->
+  parse_payload body Org_lib.Models.tag_of_yojson
+  >>= fun created_tag_payload ->
+  let todo_tag = parse_option_or_fail_test created_tag_payload.data in
+
+
+  (* GET GOTO OPPORTUNITIES *)
+  get_goto_candidates_from_api ()
+  >>= fun (resp, body) ->
+  assert_http_status resp 200;
+  parse_payload body (parse_json_list Org_lib.Models.goto_candidate_rest_of_yojson)
+  >>= fun goto_candidates_payload ->
+  let goto_candidates = parse_option_or_fail_test goto_candidates_payload.data in
+
+  Alcotest.(check int) "there should be 3 goto opportunities" 3 (List.length goto_candidates);
+  Alcotest.(check (list string)) "goto candidates have correct entity names" [set_name; thing_name; tag_name;] (List.map (fun (o:Org_lib.Models.goto_candidate_rest) -> o.entity_name) goto_candidates);
+  Alcotest.(check (list (option string))) "goto candidates have correct entity texts" [Some set_text; Some thing_text; None] (List.map (fun (o:Org_lib.Models.goto_candidate_rest) -> o.entity_text) goto_candidates);
+
+  Lwt.return_unit
+
 let () =
   let open Alcotest_lwt in
   Lwt_main.run (
-    run "Org Server Tests" [
-      "Ping Endpoint", [
+    run "Org Server Tests" [ (* suite *)
+      "Ping Endpoint", [ (* test group / category *)
         test_case "Ping Test" `Quick (
           fun _switch () ->
             reset_db () >>= fun () ->
@@ -611,6 +656,13 @@ let () =
           fun _switch () ->
             reset_db () >>= fun () ->
             test_set_whole_shebang ()
+        );
+      ];
+      "GOTO", [
+        test_case "Should return correct goto candidates" `Quick (
+          fun _switch () ->
+            reset_db () >>= fun () ->
+            test_create_and_get_goto_candidates ()
         );
       ];
     ]

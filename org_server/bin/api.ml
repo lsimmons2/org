@@ -74,6 +74,8 @@ let router _conn req body =
          Org_lib.Controller.update_set_endpoint uri body
        | (`DELETE, path) when Re.execp Controller.specific_set_path_regex path -> Org_lib.Controller.delete_set_endpoint uri
 
+       | (`GET, "/goto-candidates") -> Org_lib.Controller.get_goto_candidates_endpoint uri
+
        | _ -> (
            Logger.error_lwt "404 not found!\n" >>= fun () ->
            Server.respond_string ~status:`Not_found ~body:"Not Found" ()

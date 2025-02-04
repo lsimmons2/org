@@ -43,3 +43,24 @@ type set_rest = {
   no_tags: tag list;
   things: thing list;
 } [@@deriving yojson]
+
+
+type entity_type_rest = Thing | Tag | Set_ [@@deriving yojson]
+
+let entity_type_rest_to_yojson = function
+  | Thing -> `String "Thing"
+  | Tag -> `String "Tag"
+  | Set_ -> `String "Set_"
+
+let entity_type_rest_of_yojson = function
+  | `String "Thing" -> Ok Thing
+  | `String "Tag" -> Ok Tag
+  | `String "Set_" -> Ok Set_
+  | _ -> Error "Invalid entity_type_rest"
+
+type goto_candidate_rest = {
+  entity_id:int;
+  entity_name: string;
+  entity_type: entity_type_rest;
+  entity_text: string option;
+} [@@deriving yojson]

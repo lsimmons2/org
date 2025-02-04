@@ -424,3 +424,34 @@ let get_set_available_tags_endpoint
        let set_id_str = Re.Group.get matches 1 in
        let set_id = int_of_string set_id_str in
        Lwt.return (Repository.get_tags_available_for_set set_id))
+
+let map_sets_to_candidates (sets: Models.set list) : Models.goto_candidate_rest list =
+  List.map (fun (s: Models.set) -> { Models.entity_id = s.id; entity_name = s.name; entity_type = Set_; entity_text = s.text }) sets
+
+let map_things_to_candidates (things: Models.thing list) : Models.goto_candidate_rest list =
+  List.map (fun (t: Models.thing) -> { Models.entity_id = t.id; entity_name = t.name; entity_type = Thing; entity_text = t.text }) things
+
+let map_tags_to_candidates (tags: Models.tag list) : Models.goto_candidate_rest list =
+  List.map (fun (t: Models.tag) -> { Models.entity_id = t.id; entity_name = t.name; entity_type = Tag; entity_text = t.text }) tags
+
+let get_goto_candidates_endpoint
+  : get_endpoint
+  = generate_get_endpoint
+    (list_to_something Models.goto_candidate_rest_to_yojson)
+    (fun uri ->
+       let candidates = Result.bind (Repository.get_all_sets())
+           (fun sets ->
+              Result.bind (Repository.get_things())
+                (fun things ->
+                   Result.bind (Repository.get_tags())
+                     (fun tags ->
+                        Ok (
+                          (map_sets_to_candidates sets) @
+                          (map_things_to_candidates things) @
+                          (map_tags_to_candidates tags)
+                        )
+                     )
+                )
+           ) in
+       Lwt.return candidates
+    )

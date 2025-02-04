@@ -250,6 +250,19 @@ ARGS should be specified as keyword arguments:
 	      (message "Error fetching thing: %s" error-thrown)))))
 
 
+(defun fetch-all-goto-candidates (success-cb error-cb)
+  (request
+    (concat api-base-url "/goto-candidates")
+    :headers '(("Content-Type" . "application/json"))
+    :parser 'json-read
+    :success (cl-function
+	      (lambda (&key data &allow-other-keys)
+		(funcall success-cb (alist-get 'data data))))
+    :error (cl-function
+	    (lambda (&key error-thrown &allow-other-keys)
+	      (message "Error fetching thing: %s" error-thrown)))))
+
+
 (defun delete-thing (id callback)
   (request
     (concat api-base-url (format "/things/%d" id))

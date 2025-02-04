@@ -19,6 +19,8 @@
 (require 'tag-details)
 (require 'create-tag-form)
 
+(require 'search)
+
 (message "main.el loaded all files")
 
 (with-eval-after-load 'evil
@@ -29,6 +31,8 @@
   (evil-define-key 'normal 'global (kbd "SPC n s") 'create-new-set)
   (evil-define-key 'normal 'global (kbd "SPC n i") 'create-new-thing)
   (evil-define-key 'normal 'global (kbd "SPC n a") 'create-new-tag)
+
+  (evil-define-key 'normal 'global (kbd "SPC p o") 'search-sets-things-tags)
   )
 
 (provide 'my-org-ui)

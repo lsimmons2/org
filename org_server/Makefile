@@ -14,6 +14,9 @@ run-test-api:
 # --force needed since dune runtest will cache tests unless test file has changed?
 # https://discuss.ocaml.org/t/tutorial-for-setting-up-test-suite-with-alcotest-dune/8367/4
 run-api-tests:
+	ORG_ENV=test DUNE_CONFIG__GLOBAL_LOCK=disabled dune runtest --watch --force
+
+run-api-tests-v:
 	ORG_ENV=test ALCOTEST_VERBOSE=1 DUNE_CONFIG__GLOBAL_LOCK=disabled dune runtest --watch --force
 
 diddle:
