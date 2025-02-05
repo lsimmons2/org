@@ -14,7 +14,8 @@ let db_connect () =
   let (host, port, dbname, user, password) =
     match env with
     | Test -> ("127.0.0.1", "5433", "org_test", "leo",  "leo" )
-    | Dev -> ( "127.0.0.1", "5433", "org", "leo", "leo" )
+    | Dev -> ( "127.0.0.1", "5433", "org_dev", "leo", "leo" )
+    | Prod -> ( "127.0.0.1", "5433", "org_prod", "leo", "leo" )
   in
   new Postgresql.connection ~host:host ~port:port ~dbname:dbname ~user:user ~password:password ()
 

@@ -1,3 +1,6 @@
+prod:
+	ORG_ENV=prod dune exec -w bin/api.exe
+
 dev:
 	ORG_ENV=dev dune exec -w bin/api.exe
 

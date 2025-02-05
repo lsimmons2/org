@@ -190,7 +190,6 @@ let get_thing_endpoint
        let matches = Re.exec things_id_regex path in
        let thing_id_str = Re.Group.get matches 1 in
        let thing_id = int_of_string thing_id_str in
-       Logger.info_lwt "Logging with info_lwt: getting thing %d" thing_id >>= fun () ->
        Lwt.return (Repository.get_thing thing_id))
 
 
@@ -198,19 +197,14 @@ let get_things_endpoint
   : get_endpoint
   = generate_get_endpoint
     (list_to_something Models.thing_to_yojson)
-    (fun _uri ->
-       Logger.info_lwt "Logging with info_lwt: getting all things" >>= fun () ->
-
-       Lwt.return (Repository.get_things ()))
+    (fun _uri -> Lwt.return (Repository.get_things ()))
 
 
 let get_tags_endpoint
   : get_endpoint
   = generate_get_endpoint
     (list_to_something Models.tag_to_yojson)
-    (fun _uri -> 
-       Lwt.return (Repository.get_tags ())
-    )
+    (fun _uri -> Lwt.return (Repository.get_tags ()))
 
 
 let get_tag_endpoint

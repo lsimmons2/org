@@ -4,7 +4,10 @@
 (require 'url)
 (require 'cl-lib) ;; For handling closures
 
-(defconst api-base-url "http://localhost:7777")
+
+(defconst api-base-url "http://localhost:7777") ;; prod
+;; (defconst api-base-url "http://localhost:7776") ;; dev
+;; (defconst api-base-url "http://localhost:7775") ;; test
 
 (defun create-set (name text callback)
   " create set with NAME and TEXT and CALLBACK" 

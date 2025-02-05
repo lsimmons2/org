@@ -6,8 +6,12 @@
 
 open Lwt.Infix
 
+let config = Org_lib.Env.get_config ()
+(* let api_base_url = Printf.sprintf "http://localhost:%d" config.api_port *)
+let api_base_url = "http://localhost:7775"
+
 let test_ping () =
-  let uri = Uri.of_string "http://localhost:7777/ping" in
+  let uri = Uri.of_string (Printf.sprintf "%s/ping" api_base_url) in
   Cohttp_lwt_unix.Client.get uri >>= fun (resp, body) ->
   let status = Cohttp.Response.status resp in
   Alcotest.(check int) "Ping response status should be 200" 200 (Cohttp.Code.code_of_status status);
@@ -59,27 +63,27 @@ let reset_db () =
 
 
 let get_set_from_api set_id =
-  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/sets/%d" set_id) in
+  let uri = Uri.of_string (Printf.sprintf "%s/sets/%d" api_base_url set_id) in
   Cohttp_lwt_unix.Client.get uri
 
 let get_things_from_api () =
-  let uri = Uri.of_string "http://localhost:7777/things" in
+  let uri = Uri.of_string (Printf.sprintf "%s/things" api_base_url) in
   Cohttp_lwt_unix.Client.get uri
 
 let get_tags_from_api () =
-  let uri = Uri.of_string "http://localhost:7777/tags" in
+  let uri = Uri.of_string (Printf.sprintf "%s/tags" api_base_url) in
   Cohttp_lwt_unix.Client.get uri
 
 let get_tag_from_api tag_id =
-  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/tags/%d" tag_id)  in
+  let uri = Uri.of_string (Printf.sprintf "%s/tags/%d" api_base_url tag_id) in
   Cohttp_lwt_unix.Client.get uri
 
 let get_thing_from_api thing_id =
-  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/things/%d" thing_id) in
+  let uri = Uri.of_string (Printf.sprintf "%s/things/%d" api_base_url thing_id) in
   Cohttp_lwt_unix.Client.get uri
 
 let get_goto_candidates_from_api ?(types=[]) () =
-  let base_uri = Uri.of_string "http://localhost:7777/goto-candidates" in
+  let uri = Uri.of_string (Printf.sprintf "%s/goto-candidates" api_base_url) in
 
   let type_params =
     match types with
@@ -94,17 +98,18 @@ let get_goto_candidates_from_api ?(types=[]) () =
       ]
   in
 
+
+  let base_uri = Uri.of_string (Printf.sprintf "%s/goto-candidates" api_base_url) in
   let uri_with_params = Uri.add_query_params base_uri type_params in
   Cohttp_lwt_unix.Client.get uri_with_params
 
 
 let remove_tag_from_thing_in_api thing_id tag_id =
-  let uri = Uri.of_string (
-      Printf.sprintf "http://localhost:7777/things/%d/tags/%d" thing_id tag_id) in
+  let uri = Uri.of_string (Printf.sprintf "%s/things/%d/tags/%d" api_base_url thing_id tag_id) in
   Cohttp_lwt_unix.Client.delete uri
 
 let post_thing_to_api (body:Org_lib.Models.create_thing_body) =
-  let uri = Uri.of_string "http://localhost:7777/things" in
+  let uri = Uri.of_string (Printf.sprintf "%s/things" api_base_url) in
   let json_payload_obj: Yojson.Basic.t =
     `Assoc [
       ("name", `String body.Org_lib.Models.name);
@@ -118,7 +123,7 @@ let post_thing_to_api (body:Org_lib.Models.create_thing_body) =
   Cohttp_lwt_unix.Client.post ~headers ~body uri
 
 let post_set_to_api ~name ?text () =
-  let uri = Uri.of_string "http://localhost:7777/sets" in
+  let uri = Uri.of_string (Printf.sprintf "%s/sets" api_base_url) in
   let json_payload_obj: Yojson.Basic.t =
     `Assoc [
       ("name", `String name);
@@ -140,7 +145,7 @@ let put_set_to_api
     ?no_ids_to_add
     ?no_ids_to_remove
     () =
-  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/sets/%d" set_id) in
+  let uri = Uri.of_string (Printf.sprintf "%s/sets/%d" api_base_url set_id) in
   let json_payload_obj: Yojson.Basic.t =
     `Assoc [
       ("name", (match name with | Some n -> `String n | None -> `Null));
@@ -166,7 +171,7 @@ let put_set_to_api
 
 
 let post_tag_to_api (body:Org_lib.Models.create_tag_body) =
-  let uri = Uri.of_string "http://localhost:7777/tags" in
+  let uri = Uri.of_string (Printf.sprintf "%s/tags" api_base_url) in
   let json_payload_obj: Yojson.Basic.t =
     `Assoc [
       ("name", `String body.name);
@@ -181,7 +186,7 @@ let post_tag_to_api (body:Org_lib.Models.create_tag_body) =
 
 
 let tag_thing_in_api ~(tag_id: int) ~(thing_id: int) =
-  let uri = Uri.of_string "http://localhost:7777/tag-to-thing" in
+  let uri = Uri.of_string (Printf.sprintf "%s/tag-to-thing" api_base_url) in
   let json_payload_obj: Yojson.Basic.t =
     `Assoc [
       ("thing_id", `Int thing_id);
@@ -194,7 +199,7 @@ let tag_thing_in_api ~(tag_id: int) ~(thing_id: int) =
 
 
 let delete_tag_from_api tag_id =
-  let uri = Uri.of_string (Printf.sprintf "http://localhost:7777/tags/%d" tag_id) in
+  let uri = Uri.of_string (Printf.sprintf "%s/tags/%d" api_base_url tag_id) in
   Cohttp_lwt_unix.Client.delete uri
 
 

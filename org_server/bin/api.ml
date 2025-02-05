@@ -88,10 +88,12 @@ let router _conn req body =
        (* Respond with a 500 error *)
        Server.respond_string ~status:`Internal_server_error ~body:"Internal Server Error" ())
 
+let config = Env.get_config ()
+
 let server =
-  Server.create ~mode:(`TCP (`Port 7777)) (Server.make ~callback:router ())
+  Server.create ~mode:(`TCP (`Port config.api_port)) (Server.make ~callback:router ())
 
 let () =
   let current_env = Env.current_environment () in
-  Logger.info "Starting server on port %d in %s env..." 7777 (Env.string_of_env current_env);
+  Logger.info "Starting server on port %d in %s env..." config.api_port (Env.string_of_env current_env);
   Lwt_main.run server
