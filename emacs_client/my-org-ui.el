@@ -6,6 +6,7 @@
 (require 'tag-tiles)
 (require 'confirm-screen)
 (require 'utils)
+(require 'entity-table)
 
 (require 'set-list)
 (require 'set-details)
