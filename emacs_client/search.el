@@ -8,20 +8,23 @@
 (defun goto-tag (tag-id)
   (view-tag-details tag-id))
 
-(defun render-goto-list (candidates)
+(defun format-candidate-type (str)
+  (propertize str 'face 'font-lock-keyword-face))
+
+(defun render-goto-list (search-header candidates)
   (if (null candidates)
       (message "No goto opportunities here!")
-    (helm :sources (helm-build-sync-source "Select an option"
+    (helm :sources (helm-build-sync-source search-header
 		     :candidates (lambda ()
 
 				   (mapcar
 				    (lambda (c)
-				      (cons (alist-get 'entity_name c)
+				      (cons (format "%s: %s"
+						    (format-candidate-type (upcase (alist-get 'entity_type c)))
+						    (alist-get 'entity_name c))
 					    (list (alist-get 'entity_id c) (alist-get 'entity_type c))))
 				    candidates))
 		     :action (lambda (selected-entity)
-			       (message "Selected entity of type %s and ID: %s"
-					(nth 1 selected-entity) (nth 0 selected-entity))
 			       (let ((entity-id (nth 0 selected-entity))
 				     (entity-type (nth 1 selected-entity)))
 				 (cond
@@ -40,7 +43,7 @@
   (fetch-goto-candidates
    (lambda (data)
      (setq candidates (append data nil))
-     (render-goto-list candidates))
+     (render-goto-list "Select a set" candidates))
    (lambda (err) )
    '((type set))))
 
@@ -49,7 +52,7 @@
   (fetch-goto-candidates
    (lambda (data)
      (setq candidates (append data nil))
-     (render-goto-list candidates))
+     (render-goto-list "Select a thing" candidates))
    (lambda (err) )
    '((type thing))))
 
@@ -58,16 +61,16 @@
   (fetch-goto-candidates
    (lambda (data)
      (setq candidates (append data nil))
-     (render-goto-list candidates))
+     (render-goto-list "Select a tag" candidates))
    (lambda (err) )
    '((type tag))))
 
-(defun search-sets-things-tags ()
+(defun search-all-entities ()
   (interactive)
   (fetch-goto-candidates
    (lambda (data)
      (setq candidates (append data nil))
-     (render-goto-list candidates))
+     (render-goto-list "Select an entity" candidates))
    (lambda (err))
    ))
 
