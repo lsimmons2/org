@@ -5,9 +5,27 @@
 (require 'cl-lib) ;; For handling closures
 
 
-(defconst api-base-url "http://localhost:7777") ;; prod
-;; (defconst api-base-url "http://localhost:7776") ;; dev
-;; (defconst api-base-url "http://localhost:7775") ;; test
+;; defvar and not defconst b/c defconst is not guaranteed to evaluate in order?
+(defvar api-base-url-alist
+  '(("prod" . "http://localhost:7777")
+    ("dev"  . "http://localhost:7776")
+    ("test" . "http://localhost:7775"))
+  "Mapping of API environments to base URLs.")
+
+;; extra alist-get props b/c we're using string literals?
+(defvar api-base-url (alist-get "prod" api-base-url-alist nil nil #'string=)
+  "Current API base URL, determined by the selected environment.")
+
+
+(defun switch-org-env ()
+  "Switch between API environments (prod, dev, test)."
+  (interactive)
+  (let* ((env (completing-read "Select API environment: " '("prod" "dev" "test") nil t))
+         (url (alist-get env api-base-url-alist nil nil #'string=)))
+    (setq api-base-url url)
+    (message "Switched to %s environment: %s" env url)))
+
+
 
 (defun create-set (name text callback)
   " create set with NAME and TEXT and CALLBACK" 
