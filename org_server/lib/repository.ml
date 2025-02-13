@@ -6,7 +6,12 @@
 [@@@ocaml.warning "-69"]
 
 open Lwt.Infix
+open Ptime
 
+let parse_created_at (s : string) : Ptime.t =
+  match Ptime.of_rfc3339 s with
+  | Ok (t, _, _) -> t
+  | Error _ -> failwith (Printf.sprintf "bad tz!!! it be %S" s)
 
 let thing_mapper (result : Postgresql.result) (row : int) : Models.thing =
   {
@@ -18,9 +23,8 @@ let thing_mapper (result : Postgresql.result) (row : int) : Models.thing =
         if text_val = "" then None else Some text_val
       else
         None;
-    (* text = (let text_val = result#getvalue row 2 in if text_val = "" then None else Some text_val); *)
     tags = [];  (* Tags will be fetched and populated later *)
-
+    created_at = parse_created_at (result#getvalue row 3);
   }
 
 
@@ -34,6 +38,7 @@ let tag_mapper (result : Postgresql.result) (row : int) : Models.tag =
         if text_val = "" then None else Some text_val
       else
         None;
+    created_at = parse_created_at (result#getvalue row 3);
   }
 
 
@@ -47,9 +52,8 @@ let tag_to_thing_mapper (result : Postgresql.result) (row : int) : Models.tag_to
 
 let get_thing thing_id : (Models.thing, string) result =
 
-  Logger.debug "in get_thing for id %d" thing_id;
-  let thing_query = "SELECT id, name, text FROM things WHERE id = $1" in
-  let tag_query = "SELECT tags.id, tags.name, tags.text FROM tags
+  let thing_query = "SELECT id, name, text, created_at FROM things WHERE id = $1" in
+  let tag_query = "SELECT tags.id, tags.name, tags.text, tags.created_at FROM tags
                    JOIN tags_to_things ON tags.id = tags_to_things.tag_id
                    WHERE tags_to_things.thing_id = $1" in
   match Db.query_and_map_single ~query:thing_query ~params:[|string_of_int thing_id|] ~mapper:thing_mapper with
@@ -86,7 +90,7 @@ let get_tags () : (Models.tag list, string) result =
 
 
 let get_tag tag_id : (Models.tag, string) result =
-  let query = "SELECT id, name, text FROM tags WHERE id = $1" in
+  let query = "SELECT id, name, text, created_at FROM tags WHERE id = $1" in
   Db.query_and_map_single ~query:query ~params:[|string_of_int tag_id|] ~mapper:tag_mapper
 
 
@@ -155,9 +159,25 @@ let find_highest_set_id () =
   rv
 
 
+let current_timestamp_with_tz () : string =
+  let now = Ptime_clock.now () in
+  let tz_offset_s = (int_of_float (fst (Unix.mktime (Unix.gmtime (Unix.time ()))))) - (int_of_float ( (fst (Unix.mktime (Unix.localtime (Unix.time ())))))) in
+  let tz_offset = Printf.sprintf "%+03d:%02d" (tz_offset_s / 3600) (abs (tz_offset_s mod 3600) / 60) in
+  let rfc3339 = Ptime.to_rfc3339 ~frac_s:0 now in
+  Printf.sprintf "%s%s" (String.sub rfc3339 0 (String.length rfc3339 - 1)) tz_offset
+
+let current_ptime_and_tz_offset () : Ptime.t * int =
+  let now = Ptime_clock.now () in
+  let tz_offset_s = int_of_float (fst (Unix.mktime (Unix.gmtime (Unix.time ()))))
+                    - int_of_float (fst (Unix.mktime (Unix.localtime (Unix.time ())))) in
+  (now, tz_offset_s)
+
+
+
 let create_set ~name ~text =
   let new_set_id = (find_highest_set_id ()) + 1 in
   let file_path = get_set_file_path new_set_id in
+  let now = fst (current_ptime_and_tz_offset ()) in
   let new_set: Models.set = {
     id=new_set_id;
     name=name;
@@ -165,6 +185,7 @@ let create_set ~name ~text =
     yes_tag_ids=[];
     no_tag_ids=[];
     things=[];
+    created_at=now
   } in
   Yojson.Safe.to_file file_path (Models.set_to_yojson new_set);
   Ok new_set
@@ -194,7 +215,9 @@ let get_things_for_yes_and_no_tag_ids yes_tag_ids no_tag_ids =
 
 
 let set_rest_of_set (set: Models.set) =
+  Logger.debug "in set_reset_of_set before getting things";
   let things_res = get_things_for_yes_and_no_tag_ids set.yes_tag_ids set.no_tag_ids in
+  Logger.debug "in set_reset_of_set after getting things";
 
   let yes_tags_res =
     List.fold_left (fun acc x ->
@@ -204,6 +227,7 @@ let set_rest_of_set (set: Models.set) =
         | Ok acc_list, Ok v -> Ok (v :: acc_list)
       ) (Ok []) (List.map get_tag set.yes_tag_ids)
   in
+  Logger.debug "in set_reset_of_set after getting yes tags";
   let no_tags_res =
     List.fold_left (fun acc x ->
         match acc, x with
@@ -212,7 +236,7 @@ let set_rest_of_set (set: Models.set) =
         | Ok acc_list, Ok v -> Ok (v :: acc_list)
       ) (Ok []) (List.map get_tag set.no_tag_ids)
   in
-
+  Logger.debug "in set_reset_of_set after getting no tags";
   match things_res, yes_tags_res, no_tags_res with
   | Ok things, Ok yes_tags, Ok no_tags ->
     (Ok {
@@ -222,6 +246,7 @@ let set_rest_of_set (set: Models.set) =
         things = things;
         yes_tags = yes_tags;
         no_tags = no_tags;
+        created_at = set.created_at;
       })
   | Error e, _, _ -> Error e
   | _, Error e, _ -> Error e
@@ -236,7 +261,8 @@ let get_set set_id: (Models.set, string) result =
         Result.bind (get_things_for_yes_and_no_tag_ids d.yes_tag_ids d.no_tag_ids)
           (fun ts -> Ok { d with things = ts })
       )
-    | Error err -> failwith (Printf.sprintf "Couldn't parse set json: " ^ err)
+    | Error err -> failwith (Printf.sprintf "Couldn't parse set json current ts be: " ^ current_timestamp_with_tz ())
+    (* | Error err -> failwith (Printf.sprintf "Couldn't parse set json: " ^ err) *)
   else
     Error (Printf.sprintf "Set file doesn't exist: " ^ file_path)
 

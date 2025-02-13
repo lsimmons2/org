@@ -1,8 +1,34 @@
 
+let ptime_to_yojson (ptime : Ptime.t) : Yojson.Safe.t =
+  `String (Ptime.to_rfc3339 ptime)
+
+let ptime_of_yojson (json : Yojson.Safe.t) : (Ptime.t, string) result =
+  match json with
+  | `String s -> (
+      match Ptime.of_rfc3339 s with
+      | Ok (ptime, _, _) -> Ok ptime
+      | Error _ -> Error "Invalid timestamp format for Ptime.t"
+    )
+  | _ -> Error "Expected a JSON string for Ptime.t"
+
 (* internal and external *)
-type tag = {id:int; name:string; text:string option;} [@@deriving yojson]
-type thing = {id:int; name:string; text:string option; tags: tag list;} [@@deriving yojson]
+type tag = {
+  id:int;
+  name:string;
+  text:string option;
+  created_at: Ptime.t [@to_yojson ptime_to_yojson] [@of_yojson ptime_of_yojson];
+} [@@deriving yojson]
+
+type thing = {
+  id: int;
+  name: string;
+  text: string option;
+  tags: tag list;
+  created_at: Ptime.t [@to_yojson ptime_to_yojson] [@of_yojson ptime_of_yojson];
+} [@@deriving yojson]
+
 type tag_to_thing = {id:int; tag_id:int; thing_id:int;} [@@deriving yojson]
+
 type set = {
   id:int;
   name: string;
@@ -10,6 +36,7 @@ type set = {
   yes_tag_ids: int list;
   no_tag_ids: int list;
   things: thing list;
+  created_at: Ptime.t [@to_yojson ptime_to_yojson] [@of_yojson ptime_of_yojson];
 } [@@deriving yojson]
 
 (* api dtos *)
@@ -42,6 +69,7 @@ type set_rest = {
   yes_tags: tag list;
   no_tags: tag list;
   things: thing list;
+  created_at: Ptime.t [@to_yojson ptime_to_yojson] [@of_yojson ptime_of_yojson];
 } [@@deriving yojson]
 
 type tag_rest = {
@@ -49,6 +77,7 @@ type tag_rest = {
   name: string;
   text: string option;
   things: thing list;
+  created_at: Ptime.t [@to_yojson ptime_to_yojson] [@of_yojson ptime_of_yojson];
 } [@@deriving yojson]
 
 

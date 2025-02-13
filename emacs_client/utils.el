@@ -21,6 +21,10 @@
       (concat (substring str 0 (- max-length 3)) "…")
     str))
 
+(defun format-created-at (created-at)
+  "Convert CREATED-AT string (e.g., 2025-02-04T06:10:21Z) into MM.DD.YYYY."
+  (let* ((time (parse-time-string created-at))
+         (time-decoded (apply #'encode-time time)))
+    (format-time-string "%m.%d.%Y" time-decoded)))
+
 (provide 'utils)
-
-

@@ -3,6 +3,7 @@
 
 (defconst entity-id-col-width 7)
 (defconst entity-name-col-width 35)
+(defconst created-at-col-width 10)
 
 
 (defun entity-list-visit-entry ()
@@ -45,21 +46,24 @@ DELETE-CALLBACK is called when an entity is deleted."
     (if (not entities)
         (insert (format "*** No %s available ***\n" plural-entity-name))
       (let* ((available-width (- (window-width) 5)) ;; Adjust for margins
-             (text-col-width (- available-width (+ entity-id-col-width entity-name-col-width))))
+             (text-col-width (- available-width (+ entity-id-col-width entity-name-col-width created-at-col-width))))
         (setq tabulated-list-format
               `[(,(nth 0 col-names) ,entity-id-col-width t)
                 (,(nth 1 col-names) ,entity-name-col-width t)
-                (,(nth 2 col-names) ,text-col-width nil)])
+                (,(nth 2 col-names) ,text-col-width nil)
+		(,(nth 3 col-names) ,created-at-col-width nil)])
 
         (setq tabulated-list-entries
               (mapcar (lambda (entity)
                         (let ((id (alist-get 'id entity))
                               (name (alist-get 'name entity))
-                              (text (or (alist-get 'text entity) "-")))
+                              (text (or (alist-get 'text entity) "-"))
+			      (created-at (alist-get 'created_at entity)))
                           (list id (vector
                                     (number-to-string id)
                                     name
-                                    (truncate-string (format-for-tabulated-list-cell text) text-col-width)))))
+                                    (truncate-string (format-for-tabulated-list-cell text) text-col-width)
+				    (format-created-at created-at)))))
                       entities))
 
         (setq entity-list-view-callback view-callback)

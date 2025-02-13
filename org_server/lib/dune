@@ -1,5 +1,5 @@
 (library
  (name org_lib)
  (modules db controller models repository env logger)
- (libraries cohttp-lwt-unix postgresql yojson lwt logs logs.lwt)
+ (libraries cohttp-lwt-unix postgresql yojson lwt logs logs.lwt ptime ptime.clock)
  (preprocess (pps ppx_deriving_yojson)))

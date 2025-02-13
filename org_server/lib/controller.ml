@@ -85,7 +85,7 @@ let generate_get_endpoint
           Logger.debug_lwt "returning data %s" (Yojson.Safe.pretty_to_string resp_json) >>= fun () ->
           Cohttp_lwt_unix.Server.respond_string ~status:`OK ~body:(Yojson.Safe.to_string resp_json) ()
         | Error err ->
-          Logger.error_lwt "Error in endpoint %s\n" err >>= fun () ->
+          Logger.error_lwt "Error in controller call to %s %s\n" (Uri.path uri) err >>= fun () ->
           let resp_json = gen_api_resp_json false "my bad" None to_json in
           let json_str = Yojson.Safe.to_string resp_json in
           Cohttp_lwt_unix.Server.respond_string ~status:`Internal_server_error ~body:json_str ())
@@ -224,7 +224,8 @@ let get_tag_endpoint
                Models.id=tag.id;
                name=tag.name;
                text=tag.text;
-               things=things
+               things=things;
+               created_at=tag.created_at;
              }
            | Error err -> Lwt.return_error err
          )

@@ -11,7 +11,7 @@
 	 (setq things (append data nil)) ;; Converts `data` to a list
          (view-entity-list
 	  "Things"
-	  (list "Id" "Name" "Text")
+	  (list "Id" "Name" "Text" "Created at")
 	  things
 	  #'view-thing-details
 	  (lambda (id)

@@ -11,7 +11,7 @@
 	 (setq tags (append data nil)) ;; Converts `data` to a list
          (view-entity-list
 	  "Tags"
-	  (list "Id" "Name" "Text")
+	  (list "Id" "Name" "Text" "Created at")
 	  tags
 	  #'view-tag-details
 	  (lambda (id)
