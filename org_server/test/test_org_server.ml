@@ -342,7 +342,7 @@ let test_tag_thing () =
   assert_payload_success get_thing_payload;
   let thing: Org_lib.Models.thing = parse_option_or_fail_test get_thing_payload.data in
   Alcotest.(check int) "there should only be 1 tag" 1 (List.length thing.tags);
-  let tag_thing_tagged_with = List.hd thing.tags in 
+  let tag_thing_tagged_with = List.hd thing.tags in
   Alcotest.(check int) "tag should have right id"
     created_tag.id tag_thing_tagged_with.id;
   Alcotest.(check string) "tag should have right name"

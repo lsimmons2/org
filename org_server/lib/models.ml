@@ -27,7 +27,12 @@ type thing = {
   created_at: Ptime.t [@to_yojson ptime_to_yojson] [@of_yojson ptime_of_yojson];
 } [@@deriving yojson]
 
-type tag_to_thing = {id:int; tag_id:int; thing_id:int;} [@@deriving yojson]
+type tag_to_thing = {
+  id:int;
+  tag_id:int;
+  thing_id:int;
+  created_at: Ptime.t [@to_yojson ptime_to_yojson] [@of_yojson ptime_of_yojson];
+} [@@deriving yojson]
 
 type set = {
   id:int;
